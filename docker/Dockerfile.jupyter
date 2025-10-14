@@ -1,0 +1,123 @@
+# Use the official pixi image with CUDA support
+FROM ghcr.io/prefix-dev/pixi:0.53.0-noble-cuda-12.8.1
+
+# Build arguments
+ARG ENV_NAME
+ARG VERSION=latest
+ARG INCLUDE_OMERO=false
+
+# Switch to root for system package installation
+USER root
+
+# Install system dependencies for Jupyter and GUI libraries
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        # Build and development tools
+        build-essential \
+        git \
+        \
+        # X11 and Qt libraries for Napari/GUI rendering
+        libxcb-icccm4 \
+        libxcb-image0 \
+        libxcb-keysyms1 \
+        libxcb-randr0 \
+        libxcb-render-util0 \
+        libxcb-xinerama0 \
+        libxcb-xinput0 \
+        libxcb-xfixes0 \
+        libxcb-cursor0 \
+        libegl1 \
+        libdbus-1-3 \
+        libxkbcommon-x11-0 \
+        x11-utils \
+        \
+        # OpenGL and rendering
+        libopengl0 \
+        mesa-utils \
+        libgl1-mesa-dev \
+        \
+        # Additional X11 libs
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        libgeos-dev \
+        libgtk-3-0 \
+        libglib2.0-0 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Conditionally install OMERO dependencies (OpenJDK + SSL config adjustments)
+RUN if [ "$INCLUDE_OMERO" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            openjdk-11-jdk \
+            net-tools \
+        && apt-get clean \
+        && rm -rf /var/lib/apt/lists/* \
+        # Adjust OpenSSL config for OMERO compatibility
+        && printf "\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = DEFAULT:@SECLEVEL=1\n" >> /etc/ssl/openssl.cnf \
+        && sed -i 's/^\(CipherString\s*=\).*/\1 DEFAULT:@SECLEVEL=1/' /etc/ssl/openssl.cnf || true; \
+    fi
+
+# Fix user and group IDs to 1000
+RUN usermod -u 1000 ubuntu \
+    && groupmod -g 1000 ubuntu \
+    && chown -R ubuntu:ubuntu /home/ubuntu
+
+# Conditionally set permissions for Java if OMERO is included
+RUN if [ "$INCLUDE_OMERO" = "true" ]; then \
+        chown -R ubuntu:ubuntu /usr/lib/jvm/java-11-openjdk-amd64 \
+        && chmod -R a+rwx /usr/lib/jvm/java-11-openjdk-amd64; \
+    fi
+
+# Switch to non-root user
+USER ubuntu
+WORKDIR /home/ubuntu
+
+# Set up environment variables
+ENV PIXI_CACHE_DIR=/home/ubuntu/.pixi/cache
+ENV CONDA_OVERRIDE_CUDA=12.8
+
+# Create cache directory
+RUN mkdir -p ${PIXI_CACHE_DIR}
+
+# Setup custom OpenSSL config for OMERO if needed
+RUN if [ "$INCLUDE_OMERO" = "true" ]; then \
+        echo "openssl_conf = openssl_init\n\
+\n\
+[openssl_init]\n\
+ssl_conf = ssl_sect\n\
+\n\
+[ssl_sect]\n\
+system_default = system_default_sect\n\
+\n\
+[system_default_sect]\n\
+MinProtocol = TLSv1.2\n\
+CipherString = DEFAULT:@SECLEVEL=1" > /home/ubuntu/openssl.cnf \
+        && export OPENSSL_CONF=/home/ubuntu/openssl.cnf; \
+    fi
+
+# Copy the specific environment files
+COPY --chown=ubuntu:ubuntu ${ENV_NAME}/pixi.toml ${ENV_NAME}/pixi.lock ./
+
+# Install dependencies from the locked environment
+RUN pixi install --locked
+
+# Create entrypoint that activates pixi environment
+RUN pixi shell-hook -s bash > /entrypoint.sh && \
+    chmod +x /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh
+
+# Set entrypoint to activate environment
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+
+# Expose Jupyter port
+EXPOSE 8888
+
+# Default command: start Jupyter Lab
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.allow_origin='*'"]
+
+# Add labels
+LABEL org.opencontainers.image.source="https://github.com/maartenpaul/AI_tools_pixi"
+LABEL org.opencontainers.image.description="Jupyter container for ${ENV_NAME}"
+LABEL org.opencontainers.image.version="${VERSION}"
