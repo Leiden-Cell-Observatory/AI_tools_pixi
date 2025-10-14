@@ -1,0 +1,34 @@
+# Pixi environments (will be rebuilt in container)
+.pixi/
+**/.pixi/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# CI/CD (except the one we need)
+.github/
+!.github/workflows/build-containers.yml
+
+# Other environments we're not building
+*/
+!docker/
