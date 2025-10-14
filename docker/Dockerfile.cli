@@ -1,0 +1,53 @@
+# Use the official pixi image with CUDA support
+FROM ghcr.io/prefix-dev/pixi:0.53.0-noble-cuda-12.8.1
+
+# Build argument for environment name
+ARG ENV_NAME
+ARG VERSION=latest
+
+# Switch to root for system package installation
+USER root
+
+# Install minimal system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix user and group IDs to 1000 to prevent permission issues
+RUN usermod -u 1000 ubuntu \
+    && groupmod -g 1000 ubuntu \
+    && chown -R ubuntu:ubuntu /home/ubuntu
+
+# Switch to non-root user
+USER ubuntu
+WORKDIR /home/ubuntu
+
+# Set up environment variables
+ENV PIXI_CACHE_DIR=/home/ubuntu/.pixi/cache
+ENV CONDA_OVERRIDE_CUDA=12.8
+
+# Create cache directory
+RUN mkdir -p ${PIXI_CACHE_DIR}
+
+# Copy the specific environment files
+COPY --chown=ubuntu:ubuntu ${ENV_NAME}/pixi.toml ${ENV_NAME}/pixi.lock ./
+
+# Install dependencies from the locked environment
+RUN pixi install --locked
+
+# Create entrypoint that activates pixi environment
+RUN pixi shell-hook -s bash > /entrypoint.sh && \
+    chmod +x /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh
+
+# Set entrypoint to activate environment
+ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+CMD ["bash"]
+
+# Add labels
+LABEL org.opencontainers.image.source="https://github.com/maartenpaul/AI_tools_pixi"
+LABEL org.opencontainers.image.description="CLI container for ${ENV_NAME}"
+LABEL org.opencontainers.image.version="${VERSION}"
