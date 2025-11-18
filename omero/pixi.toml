@@ -2,14 +2,14 @@
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
 channels = ["conda-forge"]
 name = "omero"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
 
 [dependencies]
 python = "3.10.*"
-zeroc-ice = ">=3.6.5,<4"
+zeroc-ice = ">=3.6.5,<3.7"
 
 [pypi-dependencies]
 napari = { version = ">=0.6.5, <0.7", extras = ["all"] }
