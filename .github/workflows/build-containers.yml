@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, careamics, cellpose, micro_sam, omero, stardist, trackastra]
+        environment: [biapy, careamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
     
     permissions:
@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, careamics, cellpose, micro_sam, omero, stardist, trackastra]
+        environment: [biapy, careamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
     
     steps:
@@ -123,7 +123,3 @@ jobs:
           name: ${{ matrix.environment }}-${{ matrix.variant }}-${{ steps.version.outputs.version }}.sif
           path: ${{ matrix.environment }}-${{ matrix.variant }}.sif
           retention-days: 90
-
-# Other environments we're not building
-*/
-!docker/
