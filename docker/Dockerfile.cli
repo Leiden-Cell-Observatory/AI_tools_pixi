@@ -38,13 +38,13 @@ COPY --chown=ubuntu:ubuntu ${ENV_NAME}/pixi.toml ${ENV_NAME}/pixi.lock ./
 # Install dependencies from the locked environment
 RUN pixi install --locked
 
-# Create entrypoint that activates pixi environment
-RUN pixi shell-hook -s bash > /entrypoint.sh && \
-    chmod +x /entrypoint.sh && \
-    echo 'exec "$@"' >> /entrypoint.sh
+# Create entrypoint that activates pixi environment in home directory
+RUN pixi shell-hook -s bash > /home/ubuntu/entrypoint.sh && \
+    chmod +x /home/ubuntu/entrypoint.sh && \
+    echo 'exec "$@"' >> /home/ubuntu/entrypoint.sh
 
 # Set entrypoint to activate environment
-ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/home/ubuntu/entrypoint.sh"]
 CMD ["bash"]
 
 # Add labels

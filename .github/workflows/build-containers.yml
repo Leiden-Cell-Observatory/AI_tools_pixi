@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, careamics, cellpose, micro_sam, stardist]
+        environment: [biapy, CAREamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
     
     permissions:
@@ -92,7 +92,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, careamics, cellpose, micro_sam, stardist]
+        environment: [biapy, CAREamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
     
     steps:
