@@ -143,6 +143,10 @@ pixi shell
 python your_script.py
 ```
 
+## Using with Fiji plugins
+These pixi environments can be used as well as replacement for setting up a conda environment for Fiji plugins requiring a conda environment to run Python tools such as Cellpose and Spotiflow.
+For example they work with: https://github.com/BIOP/ijl-utilities-wrappers.
+
 ## 🧪 Testing CUDA Availability
 
 Most environments include a `test-cuda` task to verify GPU setup:
