@@ -1,0 +1,27 @@
+[workspace]
+authors = ["Maarten Paul <maarten.paul@gmail.com>"]
+channels = ["conda-forge"]
+name = "nninteractive"
+platforms = ["win-64","linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[system-requirements]
+cuda = "12.8"
+
+[dependencies]
+python = "3.12.*"
+pytorch = ">=2.7.1,<2.9"
+numpy = "<2.3"
+
+[pypi-dependencies]
+#torch = "*"
+#torchvision = "*"
+nninteractive = ">=1.1.2, <2"
+napari = { version = ">=0.6.6, <0.7", extras = ["all"] }
+napari-nninteractive = ">=1.0.6, <2"
+
+[pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
+index-strategy = "unsafe-best-match"
