@@ -1,0 +1,196 @@
+name: Weekly Environment Update
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: 'Comma-separated list of environments to update (leave empty for all)'
+        required: false
+        default: ''
+      create_release:
+        description: 'Create a release after successful update'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  UPDATE_BRANCH: auto/update-environments
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Step 1: Update the lock file
+  # ---------------------------------------------------------------------------
+  update-lock:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      has_changes: ${{ steps.check.outputs.has_changes }}
+      updated_envs: ${{ steps.check.outputs.updated_envs }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.53.0
+
+      # CONDA_OVERRIDE_CUDA lets the solver resolve CUDA packages on CPU-only runners
+      - name: Update pixi.lock
+        env:
+          CONDA_OVERRIDE_CUDA: "12.8"
+        run: |
+          echo "::group::Updating environments"
+          pixi update
+          echo "::endgroup::"
+
+      - name: Check for changes
+        id: check
+        run: |
+          if git diff --quiet pixi.lock 2>/dev/null; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No lock file changes detected."
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Lock file has been updated."
+            # Summarize what changed
+            echo "updated_envs=all" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push updated lock to branch
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B ${{ env.UPDATE_BRANCH }}
+          git add pixi.lock
+          git commit -m "chore: update pixi.lock ($(date +%Y-%m-%d))"
+          git push -u origin ${{ env.UPDATE_BRANCH }} --force
+
+  # ---------------------------------------------------------------------------
+  # Step 2: Test each environment (runs in parallel)
+  # ---------------------------------------------------------------------------
+  test-environments:
+    needs: update-lock
+    if: needs.update-lock.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [biapy, cellpose, stardist, trackastra, spotiflow, omero, micro_sam, careamics]
+    steps:
+      - name: Checkout update branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.UPDATE_BRANCH }}
+
+      - name: Install pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.53.0
+          environments: ${{ matrix.environment }}
+
+      - name: Install environment
+        env:
+          CONDA_OVERRIDE_CUDA: "12.8"
+        run: pixi install -e ${{ matrix.environment }} --locked
+
+      - name: Run import test
+        env:
+          CONDA_OVERRIDE_CUDA: "12.8"
+        run: pixi run -e ${{ matrix.environment }} test-import
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Create PR if all tests passed
+  # ---------------------------------------------------------------------------
+  create-pr:
+    needs: [update-lock, test-environments]
+    if: needs.update-lock.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout update branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.UPDATE_BRANCH }}
+
+      - name: Create or update Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a PR already exists for this branch
+          EXISTING_PR=$(gh pr list --head "${{ env.UPDATE_BRANCH }}" --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          PR_BODY="$(cat <<'PREOF'
+          ## Automated Environment Update
+
+          This PR was created automatically by the weekly environment update workflow.
+
+          ### What changed
+          - Updated `pixi.lock` with latest compatible dependency versions
+          - All environments passed import tests on CI
+
+          ### Environments tested
+          - biapy
+          - cellpose
+          - stardist
+          - trackastra
+          - spotiflow
+          - omero
+          - micro_sam
+          - careamics
+
+          ### Review checklist
+          - [ ] Review lock file diff for unexpected version changes
+          - [ ] Optionally test GPU-dependent functionality on a machine with CUDA
+          - [ ] Merge when satisfied
+          PREOF
+          )"
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "Updating existing PR #${EXISTING_PR}"
+            gh pr edit "$EXISTING_PR" \
+              --title "chore: weekly environment dependency update ($(date +%Y-%m-%d))" \
+              --body "$PR_BODY"
+          else
+            echo "Creating new PR"
+            gh pr create \
+              --title "chore: weekly environment dependency update ($(date +%Y-%m-%d))" \
+              --body "$PR_BODY" \
+              --base main \
+              --head "${{ env.UPDATE_BRANCH }}"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Step 4 (optional): Create a release after merge
+  # ---------------------------------------------------------------------------
+  create-release:
+    needs: [create-pr]
+    if: github.event.inputs.create_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create release tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="v$(date +%Y.%m.%d)"
+          echo "Creating release ${VERSION}"
+          gh release create "${VERSION}" \
+            --title "Environment Update ${VERSION}" \
+            --notes "Automated weekly dependency update. All environments passed import tests." \
+            --latest

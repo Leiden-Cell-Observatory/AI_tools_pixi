@@ -44,6 +44,7 @@ biapy = ">=3.6.5, <4"
 
 [feature.biapy.tasks]
 test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import biapy; import torch; import sklearn; print(f'biapy OK, torch {torch.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # Cellpose — cell and nucleus segmentation
@@ -62,6 +63,7 @@ cellpose = { version = ">=4.0.6, <5", extras = ["gui"] }
 
 [feature.cellpose.tasks]
 test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import cellpose; import torch; print(f'cellpose {cellpose.__version__}, torch {torch.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # StarDist — star-convex object detection (nuclei segmentation)
@@ -161,6 +163,7 @@ jupyter = ">=1.1.1, <2"
 
 [feature.stardist.tasks]
 test-stardist = "python ./stardist/stardist_test.py"
+test-import = "python -c \"import stardist; import tensorflow; print(f'stardist {stardist.__version__}, tf {tensorflow.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # Trackastra — deep learning cell tracking
@@ -179,6 +182,7 @@ trackastra = ">=0.4, <0.5"
 
 [feature.trackastra.tasks]
 test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import trackastra; import torch; print(f'trackastra {trackastra.__version__}, torch {torch.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # Spotiflow — spot detection in microscopy
@@ -196,6 +200,7 @@ spotiflow = ">=0.6.2, <0.7"
 
 [feature.spotiflow.tasks]
 test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import spotiflow; import torch; print(f'spotiflow {spotiflow.__version__}, torch {torch.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # OMERO — image data management (no GPU)
@@ -208,6 +213,9 @@ zeroc-ice = ">=3.6.5,<3.7"
 napari = { version = ">=0.6.5, <0.7", extras = ["all"] }
 omero-py = "==5.21.1"
 napari-omero = { version = ">=0.5.1, <0.6", extras = ["all"] }
+
+[feature.omero.tasks]
+test-import = "python -c \"import omero; import napari; print(f'omero-py OK, napari {napari.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # Micro-SAM — Segment Anything for microscopy
@@ -231,6 +239,7 @@ napari-omero = { version = ">=0.5.1, <0.6", extras = ["all"] }
 
 [feature.micro_sam.tasks]
 test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import micro_sam; import torch; print(f'micro_sam {micro_sam.__version__}, torch {torch.__version__}')\""
 
 # -----------------------------------------------------------------------------
 # CAREamics — image restoration and denoising
@@ -256,6 +265,9 @@ careamics-napari = ">=0.0.13, <0.0.14"
 [feature.careamics.pypi-options]
 extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
 index-strategy = "unsafe-best-match"
+
+[feature.careamics.tasks]
+test-import = "python -c \"import careamics; import torch; print(f'careamics {careamics.__version__}, torch {torch.__version__}')\""
 
 # CAREamics optional: BioIO support
 [feature.careamics-bioio.pypi-dependencies]
