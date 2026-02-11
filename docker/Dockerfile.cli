@@ -32,14 +32,14 @@ ENV CONDA_OVERRIDE_CUDA=12.8
 # Create cache directory
 RUN mkdir -p ${PIXI_CACHE_DIR}
 
-# Copy the specific environment files
-COPY --chown=ubuntu:ubuntu ${ENV_NAME}/pixi.toml ${ENV_NAME}/pixi.lock ./
+# Copy the unified pixi manifest and lock file
+COPY --chown=ubuntu:ubuntu pixi.toml pixi.lock ./
 
-# Install dependencies from the locked environment
-RUN pixi install --locked
+# Install only the requested environment from the locked manifest
+RUN pixi install -e ${ENV_NAME} --locked
 
-# Create entrypoint that activates pixi environment in home directory
-RUN pixi shell-hook -s bash > /home/ubuntu/entrypoint.sh && \
+# Create entrypoint that activates the specific pixi environment
+RUN pixi shell-hook -e ${ENV_NAME} -s bash > /home/ubuntu/entrypoint.sh && \
     chmod +x /home/ubuntu/entrypoint.sh && \
     echo 'exec "$@"' >> /home/ubuntu/entrypoint.sh
 

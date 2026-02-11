@@ -20,9 +20,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, CAREamics, cellpose, micro_sam, stardist]
+        environment: [biapy, careamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
-    
+
     permissions:
       contents: read
       packages: write
@@ -92,9 +92,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: [biapy, CAREamics, cellpose, micro_sam, stardist]
+        environment: [biapy, careamics, cellpose, micro_sam, stardist]
         variant: [cli, jupyter]
-    
+
     steps:
       - name: Set up Singularity
         uses: eWaterCycle/setup-apptainer@v2
