@@ -155,7 +155,42 @@
         name: pixi-kernel
         virtualenv: "{{ jupyterhub_venv }}"
 
-    - name: Restart JupyterHub to pick up pixi-kernel
+    - name: Deploy runonce wrapper script for JupyterHub pre-spawn
+      when: jupyterhub_pip.stat.exists
+      ansible.builtin.copy:
+        src: files/run-runonce.sh
+        dest: /usr/local/bin/run-runonce.sh
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Check if JupyterHub config exists
+      when: jupyterhub_pip.stat.exists
+      ansible.builtin.stat:
+        path: /etc/jupyterhub/jupyterhub_config.py
+      register: jupyterhub_config
+
+    - name: Add pre_spawn_hook to JupyterHub config for runonce
+      when: jupyterhub_pip.stat.exists and jupyterhub_config.stat.exists
+      ansible.builtin.blockinfile:
+        path: /etc/jupyterhub/jupyterhub_config.py
+        marker: "# {mark} PIXI-AI-TOOLS PRE-SPAWN HOOK"
+        block: |
+          import subprocess
+          import os
+
+          def pre_spawn_hook(spawner):
+              """Run /etc/runonce.d scripts for users who log in via JupyterHub."""
+              username = spawner.user.name
+              home_dir = os.path.expanduser(f"~{username}")
+              if os.path.islink(os.path.join(home_dir, "runonce.d")) and os.path.isdir("/etc/runonce.d"):
+                  subprocess.run(
+                      ["sudo", "--set-home", "-u", username, "bash", "/usr/local/bin/run-runonce.sh"],
+                      timeout=600
+                  )
+          c.Spawner.pre_spawn_hook = pre_spawn_hook
+
+    - name: Restart JupyterHub to pick up pixi-kernel and pre-spawn hook
       when: jupyterhub_pip.stat.exists
       ansible.builtin.systemd:
         name: jupyterhub
@@ -167,9 +202,10 @@
       ansible.builtin.debug:
         msg: >-
           {% if jupyterhub_pip.stat.exists %}
-          pixi-kernel installed into JupyterHub venv. Users can select
-          'Pixi - Python 3 (ipykernel)' kernel in JupyterLab when working
-          in AI_tools_pixi environment directories.
+          pixi-kernel installed into JupyterHub venv. Pre-spawn hook
+          configured to run runonce scripts before notebook server starts.
+          Users can select tool kernels from the JupyterLab launcher
+          immediately — no terminal login required.
           {% else %}
           JupyterHub not detected — skipping pixi-kernel installation.
           Users can use 'pixi shell' from the terminal instead.

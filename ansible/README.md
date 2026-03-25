@@ -14,6 +14,15 @@ Ansible playbook to deploy [Pixi](https://pixi.sh)-based AI/ML bioimage analysis
 2. Adds Pixi shell completion to `~/.bashrc`
 3. Creates a pixi-kernel config (`~/.config/pixi-kernel/config.toml`)
 4. Registers each tool as a **globally available Jupyter kernel** (e.g. "stardist (Pixi)", "cellpose (Pixi)")
+5. Creates **desktop application launchers** (`~/.local/share/applications/`) for GUI tools and terminal shortcuts
+
+The runonce scripts are triggered automatically regardless of how the user first accesses the workspace:
+
+| Access method | Trigger mechanism |
+|---------------|------------------|
+| **Terminal (SSH)** | `/etc/profile.d/runonce.sh` — standard login shell |
+| **JupyterLab** | `pre_spawn_hook` — runs before the notebook server starts |
+| **Desktop (Guacamole)** | `/etc/xdg/autostart/runonce.desktop` — desktop login autostart |
 
 **Users then:** select a tool kernel from the JupyterLab launcher — or navigate to an environment folder and use `pixi install` / `pixi shell` from the terminal. Pixi environments are installed on-demand (on first kernel start or first `pixi install`) to save disk space.
 
@@ -27,6 +36,23 @@ Two complementary approaches are set up automatically:
 | **pixi-kernel** auto-discovery | Installed into JupyterHub; shows "Pixi - Python 3 (ipykernel)" | When working **inside** a `~/AI_tools_pixi/<tool>/` directory — pixi-kernel detects the `pixi.toml` automatically |
 
 Both use `pixi run` under the hood, so the environment is only downloaded and installed the first time a kernel is actually started.
+
+## Desktop integration (Guacamole / VNC)
+
+On desktop workspaces, `.desktop` application launchers are created per-user at first login:
+
+| Tool | GUI launcher | Terminal launcher |
+|------|-------------|-------------------|
+| **cellpose** | cellpose GUI | `pixi shell` in cellpose/ |
+| **stardist** | napari (with stardist plugins) | `pixi shell` in stardist/ |
+| **CAREamics** | napari (with CAREamics plugin) | `pixi shell` in CAREamics/ |
+| **micro_sam** | napari (with micro-SAM plugins) | `pixi shell` in micro_sam/ |
+| **omero** | napari (with OMERO plugin) | `pixi shell` in omero/ |
+| **biapy** | — | `pixi shell` in biapy/ |
+| **spotiflow** | — | `pixi shell` in spotiflow/ |
+| **trackastra** | — | `pixi shell` in trackastra/ |
+
+GUI launchers appear in the desktop application menu under **Science**. The first launch triggers `pixi install` and may take a few minutes. Terminal launchers appear under **Development**.
 
 ## Prerequisites
 
@@ -115,16 +141,19 @@ Ansible playbook (workspace creation)
 ├── uusrc.general.runonce role → /etc/runonce.d/ mechanism
 ├── Deploy setup-ai-tools.sh → /etc/runonce.d/
 ├── [If JupyterHub] Install pixi-kernel → /etc/src/venv/src-venv/
+├── [If JupyterHub] Deploy run-runonce.sh → /usr/local/bin/
+├── [If JupyterHub] Add pre_spawn_hook → /etc/jupyterhub/jupyterhub_config.py
 └── [If JupyterHub] Restart JupyterHub
 
 Per-user runonce (first login)
 ├── git clone AI_tools_pixi → ~/AI_tools_pixi/
 ├── pixi shell completion → ~/.bashrc
 ├── pixi-kernel config → ~/.config/pixi-kernel/config.toml
-└── Register global kernels → ~/.local/share/jupyter/kernels/pixi-<tool>/
+├── Register global kernels → ~/.local/share/jupyter/kernels/pixi-<tool>/
+└── Desktop launchers → ~/.local/share/applications/pixi-<tool>*.desktop
 
 User on-demand
-└── Select a kernel in JupyterLab  — or —  cd ~/AI_tools_pixi/<env>/ && pixi install
+└── Select a kernel in JupyterLab  — or —  launch from desktop menu  — or —  pixi shell
 ```
 
 ## Files
@@ -133,5 +162,6 @@ User on-demand
 |------|---------|
 | `pixi-ai-tools.yml` | Main Ansible playbook |
 | `requirements.yml` | Ansible collection dependencies (uusrc.general) |
-| `files/setup-ai-tools.sh` | Per-user runonce script |
+| `files/setup-ai-tools.sh` | Per-user runonce script (clone repo, register kernels, desktop entries) |
+| `files/run-runonce.sh` | Runonce wrapper for non-shell contexts (JupyterHub pre-spawn) |
 | `README.md` | This documentation |

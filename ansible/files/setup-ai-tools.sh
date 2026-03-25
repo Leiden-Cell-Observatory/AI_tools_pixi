@@ -82,4 +82,51 @@ KERNEL_JSON
     fi
 done
 
+# Create desktop entries for tools (useful on Guacamole/VNC desktops).
+# GUI tools get an application launcher; all tools get a terminal launcher.
+DESKTOP_DIR="${HOME}/.local/share/applications"
+mkdir -p "${DESKTOP_DIR}"
+
+# Map of tools that have a graphical interface and their launch commands
+declare -A GUI_COMMANDS
+GUI_COMMANDS[cellpose]="python -m cellpose"
+GUI_COMMANDS[stardist]="napari"
+GUI_COMMANDS[CAREamics]="napari"
+GUI_COMMANDS[micro_sam]="napari"
+GUI_COMMANDS[omero]="napari"
+
+for tool_dir in "${INSTALL_DIR}"/*/; do
+    [ -f "${tool_dir}/pixi.toml" ] || continue
+    tool_name=$(basename "${tool_dir}")
+
+    # Terminal launcher for every tool
+    cat > "${DESKTOP_DIR}/pixi-${tool_name}-terminal.desktop" << DESKTOP_TERM
+[Desktop Entry]
+Type=Application
+Name=${tool_name} (Pixi Terminal)
+Comment=Open terminal in ${tool_name} pixi environment
+Exec=bash -c "cd ${tool_dir} && ${PIXI_BIN} shell"
+Terminal=true
+Categories=Development;Science;
+Icon=utilities-terminal
+StartupNotify=true
+DESKTOP_TERM
+
+    # GUI launcher for tools with a graphical interface
+    if [[ -v "GUI_COMMANDS[${tool_name}]" ]]; then
+        echo "Creating desktop launcher for ${tool_name}..."
+        cat > "${DESKTOP_DIR}/pixi-${tool_name}.desktop" << DESKTOP_GUI
+[Desktop Entry]
+Type=Application
+Name=${tool_name} (Pixi)
+Comment=Launch ${tool_name} graphical interface
+Exec=${PIXI_BIN} run --manifest-path ${tool_dir}pixi.toml ${GUI_COMMANDS[${tool_name}]}
+Terminal=false
+Categories=Education;Science;
+Icon=applications-science
+StartupNotify=true
+DESKTOP_GUI
+    fi
+done
+
 echo "Pixi AI Tools setup complete."
