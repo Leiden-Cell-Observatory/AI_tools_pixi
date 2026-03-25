@@ -10,6 +10,7 @@ version = "0.1.0"
 [dependencies]
 python = "3.10.*"
 zeroc-ice = ">=3.6.5,<3.7"
+jupyter = ">=1.1.1,<2"
 
 [pypi-dependencies]
 napari = { version = ">=0.6.5, <0.7", extras = ["all"] }
