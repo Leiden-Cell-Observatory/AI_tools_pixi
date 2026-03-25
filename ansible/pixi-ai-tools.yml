@@ -93,6 +93,12 @@
     # ----------------------------------------------------------------
     # Phase 3: Set up per-user runonce mechanism
     # ----------------------------------------------------------------
+    - name: Install uusrc.general Ansible collection
+      ansible.builtin.command:
+        cmd: ansible-galaxy collection install -r {{ playbook_dir }}/requirements.yml --force
+      register: galaxy_install
+      changed_when: "'Installing' in galaxy_install.stdout"
+
     - name: Include uusrc.general.runonce role
       ansible.builtin.include_role:
         name: uusrc.general.runonce
