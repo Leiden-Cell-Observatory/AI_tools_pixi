@@ -1,0 +1,170 @@
+---
+# pixi-ai-tools.yml — SURF Research Cloud component
+#
+# Installs Pixi and deploys AI/ML tool environments for bioimage analysis.
+# Optionally installs pixi-kernel into JupyterHub when the Jupyter component
+# is present, enabling per-directory Pixi kernels in JupyterLab.
+#
+# SRC Parameters (set as environment variables or via the SRC portal):
+#   PIXI_AI_TOOLS_VERSION  — Git branch/tag to clone (default: "master")
+#
+# Dependencies:
+#   - SRC-OS (Ubuntu/Debian)
+#   - SRC-External (internet access for git clone + pixi downloads)
+#   - Optional: Jupyter component (for pixi-kernel integration)
+#
+# Uses the uusrc.general Ansible collection (see requirements.yml).
+
+- name: Install Pixi AI Tools
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    pixi_ai_tools_version: "{{ lookup('env', 'PIXI_AI_TOOLS_VERSION') | default('master', true) }}"
+    pixi_home: /usr/local
+    pixi_bin: /usr/local/bin/pixi
+    jupyterhub_venv: /etc/src/venv/src-venv
+    runonce_dir: /etc/runonce.d
+
+  tasks:
+    - name: Wait for system to become reachable
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Verify Debian-family OS
+      ansible.builtin.fail:
+        msg: "This component only supports Debian-family distributions (Ubuntu)."
+      when: ansible_facts['os_family'] != 'Debian'
+
+    # ----------------------------------------------------------------
+    # Phase 1: Install system dependencies
+    # ----------------------------------------------------------------
+    - name: Install required system packages
+      ansible.builtin.apt:
+        name:
+          - git
+          - curl
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    # ----------------------------------------------------------------
+    # Phase 2: Install Pixi globally
+    # ----------------------------------------------------------------
+    - name: Check if pixi is already installed
+      ansible.builtin.stat:
+        path: "{{ pixi_bin }}"
+      register: pixi_binary
+
+    - name: Download pixi installer
+      ansible.builtin.get_url:
+        url: https://pixi.sh/install.sh
+        dest: /tmp/pixi-install.sh
+        mode: "0755"
+      when: not pixi_binary.stat.exists
+
+    - name: Install pixi
+      ansible.builtin.command:
+        cmd: bash /tmp/pixi-install.sh
+      environment:
+        PIXI_HOME: "{{ pixi_home }}"
+      args:
+        creates: "{{ pixi_bin }}"
+      when: not pixi_binary.stat.exists
+
+    - name: Remove pixi installer
+      ansible.builtin.file:
+        path: /tmp/pixi-install.sh
+        state: absent
+
+    - name: Verify pixi installation
+      ansible.builtin.command: "{{ pixi_bin }} --version"
+      register: pixi_version
+      changed_when: false
+
+    - name: Display pixi version
+      ansible.builtin.debug:
+        msg: "Pixi version: {{ pixi_version.stdout }}"
+
+    # ----------------------------------------------------------------
+    # Phase 3: Set up per-user runonce mechanism
+    # ----------------------------------------------------------------
+    - name: Include uusrc.general.runonce role
+      ansible.builtin.include_role:
+        name: uusrc.general.runonce
+
+    - name: Deploy per-user setup script to runonce.d
+      ansible.builtin.copy:
+        src: files/setup-ai-tools.sh
+        dest: "{{ runonce_dir }}/setup-ai-tools.sh"
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: Set repo version in runonce environment
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        regexp: '^PIXI_AI_TOOLS_VERSION='
+        line: "PIXI_AI_TOOLS_VERSION={{ pixi_ai_tools_version }}"
+        create: true
+        mode: "0644"
+
+    # ----------------------------------------------------------------
+    # Phase 4: GPU detection (informational)
+    # ----------------------------------------------------------------
+    - name: Check for NVIDIA GPU
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+      register: nvidia_gpu
+      changed_when: false
+      failed_when: false
+
+    - name: Display GPU info
+      ansible.builtin.debug:
+        msg: "GPU detected: {{ nvidia_gpu.stdout }}"
+      when: nvidia_gpu.rc == 0
+
+    - name: Warn if no GPU detected
+      ansible.builtin.debug:
+        msg: >
+          No NVIDIA GPU detected. AI tool environments with CUDA dependencies
+          will still install but GPU acceleration will not be available.
+          Consider using a GPU-enabled VM flavor on Research Cloud.
+      when: nvidia_gpu.rc != 0
+
+    # ----------------------------------------------------------------
+    # Phase 5: JupyterHub integration (conditional)
+    # ----------------------------------------------------------------
+    - name: Check if JupyterHub venv exists
+      ansible.builtin.stat:
+        path: "{{ jupyterhub_venv }}/bin/pip"
+      register: jupyterhub_pip
+
+    - name: Install pixi-kernel into JupyterHub venv
+      when: jupyterhub_pip.stat.exists
+      ansible.builtin.pip:
+        name: pixi-kernel
+        virtualenv: "{{ jupyterhub_venv }}"
+
+    - name: Restart JupyterHub to pick up pixi-kernel
+      when: jupyterhub_pip.stat.exists
+      ansible.builtin.systemd:
+        name: jupyterhub
+        state: restarted
+        daemon_reload: true
+      failed_when: false
+
+    - name: Display JupyterHub integration status
+      ansible.builtin.debug:
+        msg: >-
+          {% if jupyterhub_pip.stat.exists %}
+          pixi-kernel installed into JupyterHub venv. Users can select
+          'Pixi - Python 3 (ipykernel)' kernel in JupyterLab when working
+          in AI_tools_pixi environment directories.
+          {% else %}
+          JupyterHub not detected — skipping pixi-kernel installation.
+          Users can use 'pixi shell' from the terminal instead.
+          {% endif %}

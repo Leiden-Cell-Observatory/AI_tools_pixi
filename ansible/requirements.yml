@@ -1,0 +1,4 @@
+---
+collections:
+  - name: https://github.com/UtrechtUniversity/researchcloud-items.git
+    type: git
