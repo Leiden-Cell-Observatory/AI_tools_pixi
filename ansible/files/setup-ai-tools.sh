@@ -129,4 +129,17 @@ DESKTOP_GUI
     fi
 done
 
+# Copy GUI launchers to ~/Desktop/ so they appear as desktop icons
+# (useful on XFCE/Guacamole desktops; requires +x to show as trusted)
+if [ -d "${HOME}/Desktop" ] || [ -d "/etc/xdg/autostart" ]; then
+    mkdir -p "${HOME}/Desktop"
+    for desktop_file in "${DESKTOP_DIR}"/pixi-*.desktop; do
+        [ -f "${desktop_file}" ] || continue
+        # Only put GUI launchers on the desktop surface (not terminal ones)
+        case "${desktop_file}" in *-terminal.desktop) continue ;; esac
+        cp "${desktop_file}" "${HOME}/Desktop/"
+        chmod +x "${HOME}/Desktop/$(basename "${desktop_file}")"
+    done
+fi
+
 echo "Pixi AI Tools setup complete."
