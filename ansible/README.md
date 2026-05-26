@@ -83,7 +83,7 @@ ansible-galaxy collection install -r requirements.yml
 
 ### Registering as an SRC catalog component
 
-1. Create a new **plugin** in the SRC portal
+1. Create a new **component** in the SRC portal
 2. Set the source to this repository's `ansible/pixi-ai-tools.yml` playbook
 3. Optionally set the `PIXI_AI_TOOLS_VERSION` parameter
 4. Add the plugin to a **catalog item** alongside SRC-OS and SRC-External
