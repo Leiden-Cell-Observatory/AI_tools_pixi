@@ -1,58 +1,63 @@
 # Pixi AI Tools — SURF Research Cloud Component
 
-Ansible playbook to deploy [Pixi](https://pixi.sh)-based AI/ML bioimage analysis tool environments on [SURF Research Cloud](https://portal.live.surfresearchcloud.nl/) workspaces.
+Ansible playbook to deploy [Pixi](https://pixi.sh)-based AI/ML bioimage analysis tool environments on [SURF Research Cloud](https://portal.live.surfresearchcloud.nl/) workspaces, designed for teaching workspaces where many students share one VM.
 
 ## What it does
 
 **At workspace creation (Ansible):**
 1. Installs Pixi globally (`/usr/local/bin/pixi`)
-2. Sets up a per-user [runonce](https://utrechtuniversity.github.io/researchcloud-items/roles/runonce.html) script that runs on first login
-3. If JupyterHub is present, installs [pixi-kernel](https://github.com/renan-r-santos/pixi-kernel) for per-directory kernel auto-discovery and restarts JupyterHub
+2. Clones the tools **once** to `/opt/AI_tools_pixi` (root-owned, read-only for users)
+3. Pre-installs the environments named by `PIXI_AI_TOOLS_PRELOAD` into that shared location
+4. Registers a **system-wide Jupyter kernel** per pre-installed tool — every user sees them at first login, with no per-user setup
+5. Sets up a **shared package cache** at `/opt/pixi-cache` that users can write to
+6. Installs `pixi-kernel` into the JupyterHub single-user venv and lifts SRC's kernel allowlist (see below)
 
-**At first user login (runonce):**
-1. Clones [AI_tools_pixi](https://github.com/Leiden-Cell-Observatory/AI_tools_pixi) to `~/AI_tools_pixi`
-2. Adds Pixi shell completion to `~/.bashrc`
-3. Creates a pixi-kernel config (`~/.config/pixi-kernel/config.toml`)
-4. Registers each tool as a **globally available Jupyter kernel** (e.g. "stardist (Pixi)", "cellpose (Pixi)")
-5. Creates **desktop application launchers** (`~/.local/share/applications/`) for GUI tools and terminal shortcuts
+**At first user login (runonce):** shell completion, desktop launchers for GUI tools, and cleanup of kernels left by older versions. No cloning, no environment installs.
 
-The runonce scripts are triggered automatically regardless of how the user first accesses the workspace:
+## Two SRC-specific gotchas this component handles
 
-| Access method | Trigger mechanism |
-|---------------|------------------|
-| **Terminal (SSH)** | `/etc/profile.d/runonce.sh` — standard login shell |
-| **JupyterLab** | `pre_spawn_hook` — runs before the notebook server starts |
-| **Desktop (Guacamole)** | `/etc/xdg/autostart/runonce.desktop` — desktop login autostart |
+SURF's Jupyter component restricts the JupyterLab launcher to a single kernel:
 
-**Users then:** select a tool kernel from the JupyterLab launcher — or navigate to an environment folder and use `pixi install` / `pixi shell` from the terminal. Pixi environments are installed on-demand (on first kernel start or first `pixi install`) to save disk space.
+```python
+c.Spawner.args = ["--KernelSpecManager.ensure_native_kernel=False",
+                  "--KernelSpecManager.whitelist={'src-default'}"]
+```
 
-## Jupyter kernel integration
+Any kernel you register is discovered and then **silently filtered out of the launcher**. The playbook appends its own `c.Spawner.args` to `/etc/jupyterhub/jupyterhub_config.py` (last assignment wins) to remove that allowlist.
 
-Two complementary approaches are set up automatically:
+SRC also ships **two** venvs. `/etc/src/venv/src-venv` is the tooling venv; the single-user notebook servers are spawned from `/etc/src/venv/jupyter-venv`. Anything installed into the wrong one is invisible to Jupyter. The playbook locates the venv that actually owns `jupyterhub-singleuser` rather than assuming a name.
 
-| Approach | How it works | When to use |
-|----------|-------------|-------------|
-| **Global kernels** (e.g. "stardist (Pixi)") | Registered per-user at first login via `kernel.json` specs that call `pixi run --manifest-path` | Select a tool from the JupyterLab launcher from **any** directory |
-| **pixi-kernel** auto-discovery | Installed into JupyterHub; shows "Pixi - Python 3 (ipykernel)" | When working **inside** a `~/AI_tools_pixi/<tool>/` directory — pixi-kernel detects the `pixi.toml` automatically |
+## Why the environments are shared
 
-Both use `pixi run` under the hood, so the environment is only downloaded and installed the first time a kernel is actually started.
+A per-user copy of every environment does not fit on a teaching VM: each env with PyTorch + CUDA is 5–10 GB, and a per-user package cache duplicates the downloads on top of that. A class of 20 would need multiple terabytes.
 
-## Desktop integration (Guacamole / VNC)
+Instead there is one root-owned copy in `/opt/AI_tools_pixi` and one shared cache. Kernels run it with `pixi run --frozen`, which uses the lock file as-is: no solve, no writes to `/opt`, and the kernel starts in seconds instead of timing out behind a multi-GB install.
 
-On desktop workspaces, `.desktop` application launchers are created per-user at first login:
+Users cannot write to `/opt`, so **only pre-installed tools get a shared kernel.**
 
-| Tool | GUI launcher | Terminal launcher |
-|------|-------------|-------------------|
-| **cellpose** | cellpose GUI | `pixi shell` in cellpose/ |
-| **stardist** | napari (with stardist plugins) | `pixi shell` in stardist/ |
-| **CAREamics** | napari (with CAREamics plugin) | `pixi shell` in CAREamics/ |
-| **micro_sam** | napari (with micro-SAM plugins) | `pixi shell` in micro_sam/ |
-| **omero** | napari (with OMERO plugin) | `pixi shell` in omero/ |
-| **biapy** | — | `pixi shell` in biapy/ |
-| **spotiflow** | — | `pixi shell` in spotiflow/ |
-| **trackastra** | — | `pixi shell` in trackastra/ |
+## Adding packages: `ai-tools`
 
-GUI launchers appear in the desktop application menu under **Science**. The first launch triggers `pixi install` and may take a few minutes. Terminal launchers appear under **Development**.
+Students who need extra packages fork an environment into their home directory:
+
+```bash
+ai-tools list            # what is available, and what you have your own copy of
+ai-tools fork cellpose   # your own editable copy in ~/AI_tools_pixi/cellpose
+cd ~/AI_tools_pixi/cellpose && pixi add scikit-image
+ai-tools reset cellpose  # throw your copy away, go back to the shared one
+```
+
+A fork copies only `pixi.toml` + `pixi.lock` and reinstalls from the **shared cache**. Because pixi hardlinks package files out of the cache (same filesystem), a fork costs a fraction of the environment's apparent size — measured at **74 MB of real disk for a 1.3 GB environment**. The fork shows up in JupyterLab as `<tool> (Pixi, mine)`, alongside the shared `<tool> (Pixi, shared)`.
+
+The shared cache is group-writable via a default ACL for the workspace group, so `pixi add` works for users even though root wrote the cache first. A plain `1777` directory is not enough — pixi opens the repodata cache read-write, and root's files inside would be `644 root:root`.
+
+## SRC Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `PIXI_AI_TOOLS_VERSION` | `master` | Git branch or tag to deploy |
+| `PIXI_AI_TOOLS_PRELOAD` | `all` | Comma-separated tools to pre-install, or `all`. Only pre-installed tools get a shared kernel. |
+
+**Set `PIXI_AI_TOOLS_PRELOAD` to just the tools your course uses.** `all` pre-installs eight environments (~50 GB, a long deploy). Something like `cellpose,stardist,CAREamics` keeps the deploy short. This cost is paid once, at deploy time, before any student logs in — never on a student's first kernel click.
 
 ## Prerequisites
 
@@ -60,101 +65,45 @@ GUI launchers appear in the desktop application menu under **Science**. The firs
 |-----------|----------|-------|
 | SRC-OS (Ubuntu) | Yes | Debian-family only |
 | SRC-External | Yes | Internet access for git clone + package downloads |
-| Jupyter component | No | If present, pixi-kernel + global kernels are set up automatically |
-| GPU flavor | No | Recommended for CUDA-accelerated tools |
+| Jupyter component | No | If present, kernels appear in JupyterLab automatically |
+| GPU flavor | No | Recommended for the CUDA tools |
 
-## SRC Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `PIXI_AI_TOOLS_VERSION` | `master` | Git branch or tag of the AI_tools_pixi repository to clone |
-
-Set this parameter in the SRC portal when configuring the component to pin a specific release (e.g. `v0.1.0`).
-
-## Dependencies
-
-This playbook uses the [uusrc.general](https://github.com/UtrechtUniversity/researchcloud-items) Ansible collection for the `runonce` role. Install before running:
-
-```bash
-ansible-galaxy collection install -r requirements.yml
-```
+Disk: size the VM for the shared install (~50 GB for all eight environments) plus room for student forks and data.
 
 ## Usage
-
-### Registering as an SRC catalog component
-
-1. Create a new **component** in the SRC portal
-2. Set the source to this repository's `ansible/pixi-ai-tools.yml` playbook
-3. Optionally set the `PIXI_AI_TOOLS_VERSION` parameter
-4. Add the plugin to a **catalog item** alongside SRC-OS and SRC-External
-5. For JupyterLab workspaces, also include the Jupyter component — pixi-kernel integration is automatic
-
-### Running manually (for testing)
 
 ```bash
 cd ansible/
 ansible-galaxy collection install -r requirements.yml
-ansible-playbook pixi-ai-tools.yml
+sudo ansible-playbook pixi-ai-tools.yml            # preloads everything
+sudo env PIXI_AI_TOOLS_PRELOAD=cellpose,stardist ansible-playbook pixi-ai-tools.yml
 ```
 
-## User workflows
+## Available environments
 
-### JupyterLab workspace
+| Environment | Description | CUDA |
+|-------------|-------------|------|
+| `biapy/` | BiaPy deep learning bioimage analysis | 12.8 |
+| `CAREamics/` | Image denoising and restoration | 12.8 |
+| `cellpose/` | Cell and nucleus segmentation | 12.8 |
+| `micro_sam/` | Segment Anything for microscopy | 12.8 |
+| `omero/` | OMERO image server client + Napari | — |
+| `spotiflow/` | Spot detection in microscopy | 12.8 |
+| `stardist/` | Star-convex object detection | 11.8 |
+| `trackastra/` | Cell tracking for time-lapse data | 12.8 |
 
-1. Open JupyterLab
-2. Select a kernel from the launcher — e.g. **"stardist (Pixi)"** or **"CAREamics (Pixi)"**
-3. The first start triggers `pixi install` and may take a few minutes to download packages
-4. Subsequent kernel starts are fast
+## Troubleshooting
 
-Alternatively, navigate to `~/AI_tools_pixi/cellpose/` and select the **"Pixi - Python 3 (ipykernel)"** kernel — pixi-kernel auto-detects the directory's `pixi.toml`.
+**Kernels do not appear in the JupyterLab launcher.** Check that the allowlist override survived — an SRC Jupyter component update can rewrite the config:
 
-### Desktop workspace
-
-1. Open a terminal
-2. Navigate to the environment: `cd ~/AI_tools_pixi/cellpose/`
-3. Install dependencies: `pixi install`
-4. Activate the environment: `pixi shell`
-5. Or run tools directly: `pixi run python my_script.py`
-
-### Available environments
-
-| Environment | Description | CUDA | GPU-accelerated |
-|-------------|-------------|------|-----------------|
-| `biapy/` | BiaPy deep learning bioimage analysis | 12.8 | Yes |
-| `CAREamics/` | Image denoising and restoration | 12.8 | Yes |
-| `cellpose/` | Cell and nucleus segmentation | 12.8 | Yes |
-| `micro_sam/` | Segment Anything for microscopy | 12.8 | Yes |
-| `omero/` | OMERO image server client + Napari | — | No |
-| `spotiflow/` | Spot detection in microscopy | 12.8 | Yes |
-| `stardist/` | Star-convex object detection | 11.8 | Yes |
-| `trackastra/` | Cell tracking for time-lapse data | 12.8 | Yes |
-
-## Disk space
-
-Each environment with PyTorch + CUDA can use **5–10 GB**. Environments are **not pre-installed** — users install only what they need. If all environments are installed, expect **~50 GB** total. Choose an appropriate VM storage size on SRC.
-
-## Architecture
-
+```bash
+grep -A1 "Spawner.args" /etc/jupyterhub/jupyterhub_config.py   # should NOT mention whitelist
+sudo /etc/src/venv/jupyter-venv/bin/jupyter kernelspec list     # should list pixi-<tool>
 ```
-Ansible playbook (workspace creation)
-├── Install pixi → /usr/local/bin/pixi
-├── uusrc.general.runonce role → /etc/runonce.d/ mechanism
-├── Deploy setup-ai-tools.sh → /etc/runonce.d/
-├── [If JupyterHub] Install pixi-kernel → /etc/src/venv/src-venv/
-├── [If JupyterHub] Deploy run-runonce.sh → /usr/local/bin/
-├── [If JupyterHub] Add pre_spawn_hook → /etc/jupyterhub/jupyterhub_config.py
-└── [If JupyterHub] Restart JupyterHub
 
-Per-user runonce (first login)
-├── git clone AI_tools_pixi → ~/AI_tools_pixi/
-├── pixi shell completion → ~/.bashrc
-├── pixi-kernel config → ~/.config/pixi-kernel/config.toml
-├── Register global kernels → ~/.local/share/jupyter/kernels/pixi-<tool>/
-└── Desktop launchers → ~/.local/share/applications/pixi-<tool>*.desktop
+**A kernel dies immediately.** Its environment was probably not pre-installed (`--frozen` fails when the env is missing). Run `ai-tools list` — anything showing `not built` has no usable shared kernel; add it to `PIXI_AI_TOOLS_PRELOAD` and re-run the playbook.
 
-User on-demand
-└── Select a kernel in JupyterLab  — or —  launch from desktop menu  — or —  pixi shell
-```
+**A user's kernel shadows the shared one.** Kernelspecs in `~/.local/share/jupyter/kernels` win over system ones with the same name. The playbook removes per-user `pixi-<tool>` kernels that point at a home-directory clone; personal forks (`pixi-<tool>-mine`) use a distinct name and are left alone.
 
 ## Files
 
@@ -162,6 +111,6 @@ User on-demand
 |------|---------|
 | `pixi-ai-tools.yml` | Main Ansible playbook |
 | `requirements.yml` | Ansible collection dependencies (uusrc.general) |
-| `files/setup-ai-tools.sh` | Per-user runonce script (clone repo, register kernels, desktop entries) |
-| `files/run-runonce.sh` | Runonce wrapper for non-shell contexts (JupyterHub pre-spawn) |
-| `README.md` | This documentation |
+| `files/setup-ai-tools.sh` | Per-user runonce script (completion, desktop launchers, cleanup) |
+| `files/run-runonce.sh` | Runonce wrapper for the JupyterHub pre-spawn hook |
+| `files/ai-tools` | User-facing helper: `list` / `fork` / `reset` |

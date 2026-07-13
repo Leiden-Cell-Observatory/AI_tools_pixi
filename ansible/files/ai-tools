@@ -1,0 +1,134 @@
+#!/bin/bash
+# ai-tools — work with the shared Pixi AI tool environments.
+#
+# The environments in /opt/AI_tools_pixi are shared by every user on this
+# workspace and are read-only. To add packages you need your own copy: "fork"
+# makes one in your home directory. Because the package cache is shared and
+# pixi hardlinks package files out of it, a fork typically costs a fraction of
+# the environment's apparent size and takes seconds rather than minutes.
+
+set -euo pipefail
+
+SHARED_DIR="${SHARED_DIR:-/opt/AI_tools_pixi}"
+PIXI_CACHE_DIR="${PIXI_CACHE_DIR:-/opt/pixi-cache}"
+PIXI_BIN="${PIXI_BIN:-/usr/local/bin/pixi}"
+MY_DIR="${HOME}/AI_tools_pixi"
+KERNEL_DIR="${HOME}/.local/share/jupyter/kernels"
+
+export PIXI_CACHE_DIR
+
+usage() {
+    cat <<EOF
+Usage: ai-tools <command> [tool]
+
+Commands:
+  list                 Show the available tools and whether you have your own copy
+  fork <tool>          Make your own editable copy of <tool> so you can add packages
+  reset <tool>         Delete your copy of <tool> and go back to the shared one
+
+After forking, add packages like this:
+  cd ~/AI_tools_pixi/<tool> && pixi add scikit-image
+
+Your copy appears in JupyterLab as "<tool> (Pixi, mine)".
+EOF
+}
+
+available_tools() {
+    for d in "${SHARED_DIR}"/*/; do
+        [ -f "${d}pixi.toml" ] || continue
+        basename "${d}"
+    done
+}
+
+cmd_list() {
+    printf '%-16s %-12s %s\n' "TOOL" "SHARED" "YOUR COPY"
+    for tool in $(available_tools); do
+        if [ -d "${SHARED_DIR}/${tool}/.pixi/envs/default" ]; then
+            shared="ready"
+        else
+            shared="not built"
+        fi
+        # A plain checkout of the repo in $HOME is not a fork — only an actually
+        # built environment counts.
+        if [ -d "${MY_DIR}/${tool}/.pixi/envs/default" ]; then
+            mine="yes (~/AI_tools_pixi/${tool})"
+        else
+            mine="-"
+        fi
+        printf '%-16s %-12s %s\n' "${tool}" "${shared}" "${mine}"
+    done
+}
+
+cmd_fork() {
+    local tool="${1:-}"
+    if [ -z "${tool}" ] || [ ! -f "${SHARED_DIR}/${tool}/pixi.toml" ]; then
+        echo "Unknown tool: '${tool:-}'. Run 'ai-tools list' to see the options." >&2
+        exit 1
+    fi
+
+    local dest="${MY_DIR}/${tool}"
+    if [ -d "${dest}/.pixi/envs/default" ]; then
+        echo "You already have a copy at ${dest}."
+        echo "Add packages with: cd ${dest} && pixi add <package>"
+        exit 0
+    fi
+
+    echo "Creating your own copy of '${tool}' at ${dest}..."
+    mkdir -p "${dest}"
+    # Copy only the manifest and lock file — never the shared .pixi/ directory.
+    # pixi rebuilds the environment from the lock, hardlinking from the shared
+    # cache, so the packages are not duplicated on disk.
+    cp -n "${SHARED_DIR}/${tool}/pixi.toml" "${dest}/"
+    [ -f "${SHARED_DIR}/${tool}/pixi.lock" ] && cp -n "${SHARED_DIR}/${tool}/pixi.lock" "${dest}/"
+
+    echo "Installing (reusing the shared package cache — this should be quick)..."
+    "${PIXI_BIN}" install --manifest-path "${dest}/pixi.toml"
+
+    mkdir -p "${KERNEL_DIR}/pixi-${tool}-mine"
+    cat > "${KERNEL_DIR}/pixi-${tool}-mine/kernel.json" <<KERNEL_JSON
+{
+  "argv": [
+    "${PIXI_BIN}",
+    "run",
+    "--manifest-path", "${dest}/pixi.toml",
+    "python", "-m", "ipykernel_launcher",
+    "-f", "{connection_file}"
+  ],
+  "display_name": "${tool} (Pixi, mine)",
+  "language": "python",
+  "env": {
+    "PIXI_CACHE_DIR": "${PIXI_CACHE_DIR}"
+  }
+}
+KERNEL_JSON
+
+    echo
+    echo "Done. Your copy is at ${dest}"
+    echo "  Add packages:  cd ${dest} && pixi add <package>"
+    echo "  In JupyterLab: pick the kernel '${tool} (Pixi, mine)'"
+    echo "  (Reload the JupyterLab browser tab for the new kernel to appear.)"
+}
+
+cmd_reset() {
+    local tool="${1:-}"
+    local dest="${MY_DIR}/${tool}"
+    if [ -z "${tool}" ] || [ ! -d "${dest}" ]; then
+        echo "You have no copy of '${tool:-}' to reset." >&2
+        exit 1
+    fi
+    echo "This will delete ${dest} — including any packages you added there."
+    read -r -p "Type the tool name to confirm: " confirm
+    if [ "${confirm}" != "${tool}" ]; then
+        echo "Not confirmed; nothing deleted."
+        exit 1
+    fi
+    rm -rf "${dest}" "${KERNEL_DIR}/pixi-${tool}-mine"
+    echo "Removed. You are back to the shared '${tool}' environment."
+}
+
+case "${1:-}" in
+    list)  cmd_list ;;
+    fork)  cmd_fork "${2:-}" ;;
+    reset) cmd_reset "${2:-}" ;;
+    *)     usage ;;
+esac

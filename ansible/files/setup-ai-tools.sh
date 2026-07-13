@@ -2,11 +2,18 @@
 # setup-ai-tools.sh — Runonce script for per-user Pixi AI Tools setup
 # Placed in /etc/runonce.d/ by the pixi-ai-tools Ansible component.
 # Executed once per user upon first login (via uusrc.general.runonce).
+#
+# The tool environments themselves are shared and are installed system-wide by
+# the Ansible playbook (/opt/AI_tools_pixi), and their Jupyter kernels are
+# registered system-wide too. So this script deliberately does NOT clone the
+# repo or install any environment per user — doing that once per student would
+# multiply every 5-10 GB environment by the size of the class.
+#
+# What is left here is only the per-user cosmetics: shell completion, desktop
+# launchers, and cleanup of kernels left behind by the older per-user design.
 
 set -euo pipefail
 
-# Source /etc/environment to pick up PIXI_AI_TOOLS_VERSION set by the playbook
-# (may not be in the environment yet if this is the user's first login)
 if [ -f /etc/environment ]; then
     set -a
     # shellcheck source=/dev/null
@@ -14,80 +21,55 @@ if [ -f /etc/environment ]; then
     set +a
 fi
 
-REPO_URL="https://github.com/Leiden-Cell-Observatory/AI_tools_pixi.git"
-INSTALL_DIR="${HOME}/AI_tools_pixi"
-PIXI_AI_TOOLS_VERSION="${PIXI_AI_TOOLS_VERSION:-master}"
-
-# Clone the AI tools repository if not already present
-if [ ! -d "${INSTALL_DIR}" ]; then
-    echo "Cloning AI_tools_pixi (${PIXI_AI_TOOLS_VERSION}) to ${INSTALL_DIR}..."
-    git clone --branch "${PIXI_AI_TOOLS_VERSION}" --depth 1 \
-        "${REPO_URL}" "${INSTALL_DIR}"
-else
-    echo "AI_tools_pixi already exists at ${INSTALL_DIR}, skipping clone."
-fi
-
-# Add pixi shell completion to .bashrc if not already present
-if [ -f "${HOME}/.bashrc" ] && ! grep -q 'pixi completion' "${HOME}/.bashrc"; then
-    echo "Adding pixi shell completion to .bashrc..."
-    cat >> "${HOME}/.bashrc" << 'PIXI_COMPLETION'
-
-# Pixi shell completion
-eval "$(pixi completion --shell bash)"
-PIXI_COMPLETION
-fi
-
-# Create pixi-kernel config so it can find the pixi binary
-PIXI_KERNEL_CONFIG_DIR="${HOME}/.config/pixi-kernel"
-PIXI_KERNEL_CONFIG="${PIXI_KERNEL_CONFIG_DIR}/config.toml"
-if [ ! -f "${PIXI_KERNEL_CONFIG}" ]; then
-    PIXI_BIN=$(command -v pixi 2>/dev/null || echo "/usr/local/bin/pixi")
-    if [ -x "${PIXI_BIN}" ]; then
-        echo "Creating pixi-kernel config at ${PIXI_KERNEL_CONFIG}..."
-        mkdir -p "${PIXI_KERNEL_CONFIG_DIR}"
-        echo "pixi-path = \"${PIXI_BIN}\"" > "${PIXI_KERNEL_CONFIG}"
-    fi
-fi
-
-# Register each pixi environment as a globally available Jupyter kernel.
-# This creates kernel specs that use "pixi run" as the launcher, so the
-# actual environment is only installed on first kernel start (not now).
-KERNEL_BASE_DIR="${HOME}/.local/share/jupyter/kernels"
+SHARED_DIR="${SHARED_DIR:-/opt/AI_tools_pixi}"
+PIXI_CACHE_DIR="${PIXI_CACHE_DIR:-/opt/pixi-cache}"
 PIXI_BIN=$(command -v pixi 2>/dev/null || echo "/usr/local/bin/pixi")
+KERNEL_DIR="${HOME}/.local/share/jupyter/kernels"
 
-for tool_dir in "${INSTALL_DIR}"/*/; do
-    [ -f "${tool_dir}/pixi.toml" ] || continue
-    # Only register tools that have jupyter or ipykernel as a dependency
-    grep -qE 'jupyter|ipykernel' "${tool_dir}/pixi.toml" || continue
+if [ ! -d "${SHARED_DIR}" ]; then
+    echo "Shared tools directory ${SHARED_DIR} not found — nothing to set up."
+    exit 0
+fi
 
-    tool_name=$(basename "${tool_dir}")
-    kernel_dir="${KERNEL_BASE_DIR}/pixi-${tool_name}"
-
-    if [ ! -d "${kernel_dir}" ]; then
-        echo "Registering Jupyter kernel for ${tool_name}..."
-        mkdir -p "${kernel_dir}"
-        cat > "${kernel_dir}/kernel.json" << KERNEL_JSON
-{
-  "argv": [
-    "${PIXI_BIN}",
-    "run",
-    "--manifest-path", "${tool_dir}pixi.toml",
-    "python", "-m", "ipykernel_launcher",
-    "-f", "{connection_file}"
-  ],
-  "display_name": "${tool_name} (Pixi)",
-  "language": "python"
-}
-KERNEL_JSON
+# Older versions of this component registered per-user kernels that pointed at
+# a per-user clone in ~/AI_tools_pixi. Those are superseded by the shared
+# system-wide kernels, and if left in place each one would trigger a private
+# multi-GB install on first use. Personal forks made with `ai-tools fork` are
+# named pixi-<tool>-mine and are intentionally left alone.
+for stale in "${KERNEL_DIR}"/pixi-*; do
+    [ -d "${stale}" ] || continue
+    case "${stale}" in *-mine) continue ;; esac
+    if grep -q "${HOME}/AI_tools_pixi" "${stale}/kernel.json" 2>/dev/null; then
+        echo "Removing superseded per-user kernel: $(basename "${stale}")"
+        rm -rf "${stale}"
     fi
 done
 
-# Create desktop entries for tools (useful on Guacamole/VNC desktops).
-# GUI tools get an application launcher; all tools get a terminal launcher.
+# Pixi shell completion + shared cache for interactive shells
+if [ -f "${HOME}/.bashrc" ] && ! grep -q 'pixi completion' "${HOME}/.bashrc"; then
+    echo "Adding pixi shell completion to .bashrc..."
+    cat >> "${HOME}/.bashrc" << PIXI_BASHRC
+
+# Pixi AI tools
+export PIXI_CACHE_DIR="${PIXI_CACHE_DIR}"
+eval "\$(pixi completion --shell bash)"
+PIXI_BASHRC
+fi
+
+# pixi-kernel finds the pixi binary via this config (used when a notebook is
+# opened from inside a directory that has its own pixi.toml)
+PIXI_KERNEL_CONFIG_DIR="${HOME}/.config/pixi-kernel"
+if [ ! -f "${PIXI_KERNEL_CONFIG_DIR}/config.toml" ] && [ -x "${PIXI_BIN}" ]; then
+    echo "Creating pixi-kernel config..."
+    mkdir -p "${PIXI_KERNEL_CONFIG_DIR}"
+    echo "pixi-path = \"${PIXI_BIN}\"" > "${PIXI_KERNEL_CONFIG_DIR}/config.toml"
+fi
+
+# Desktop entries for GUI tools (Guacamole/VNC desktops), pointing at the
+# shared environments. --frozen keeps them from trying to write to /opt.
 DESKTOP_DIR="${HOME}/.local/share/applications"
 mkdir -p "${DESKTOP_DIR}"
 
-# Map of tools that have a graphical interface and their launch commands
 declare -A GUI_COMMANDS
 GUI_COMMANDS[cellpose]="python -m cellpose"
 GUI_COMMANDS[stardist]="napari"
@@ -95,32 +77,32 @@ GUI_COMMANDS[CAREamics]="napari"
 GUI_COMMANDS[micro_sam]="napari"
 GUI_COMMANDS[omero]="napari"
 
-for tool_dir in "${INSTALL_DIR}"/*/; do
-    [ -f "${tool_dir}/pixi.toml" ] || continue
+for tool_dir in "${SHARED_DIR}"/*/; do
+    [ -f "${tool_dir}pixi.toml" ] || continue
+    # Only advertise environments that were actually pre-installed
+    [ -d "${tool_dir}.pixi/envs/default" ] || continue
     tool_name=$(basename "${tool_dir}")
 
-    # Terminal launcher for every tool
     cat > "${DESKTOP_DIR}/pixi-${tool_name}-terminal.desktop" << DESKTOP_TERM
 [Desktop Entry]
 Type=Application
 Name=${tool_name} (Pixi Terminal)
-Comment=Open terminal in ${tool_name} pixi environment
-Exec=bash -c "cd ${tool_dir} && ${PIXI_BIN} shell"
+Comment=Open a shell in the shared ${tool_name} environment
+Exec=bash -c "cd ${tool_dir} && ${PIXI_BIN} shell --frozen"
 Terminal=true
 Categories=Development;Science;
 Icon=utilities-terminal
 StartupNotify=true
 DESKTOP_TERM
 
-    # GUI launcher for tools with a graphical interface
     if [[ -v "GUI_COMMANDS[${tool_name}]" ]]; then
         echo "Creating desktop launcher for ${tool_name}..."
         cat > "${DESKTOP_DIR}/pixi-${tool_name}.desktop" << DESKTOP_GUI
 [Desktop Entry]
 Type=Application
 Name=${tool_name} (Pixi)
-Comment=Launch ${tool_name} graphical interface
-Exec=${PIXI_BIN} run --manifest-path ${tool_dir}pixi.toml ${GUI_COMMANDS[${tool_name}]}
+Comment=Launch the ${tool_name} graphical interface
+Exec=${PIXI_BIN} run --frozen --manifest-path ${tool_dir}pixi.toml ${GUI_COMMANDS[${tool_name}]}
 Terminal=false
 Categories=Education;Science;
 Icon=applications-science
@@ -129,17 +111,14 @@ DESKTOP_GUI
     fi
 done
 
-# Copy GUI launchers to ~/Desktop/ so they appear as desktop icons
-# (useful on XFCE/Guacamole desktops; requires +x to show as trusted)
 if [ -d "${HOME}/Desktop" ] || [ -d "/etc/xdg/autostart" ]; then
     mkdir -p "${HOME}/Desktop"
     for desktop_file in "${DESKTOP_DIR}"/pixi-*.desktop; do
         [ -f "${desktop_file}" ] || continue
-        # Only put GUI launchers on the desktop surface (not terminal ones)
         case "${desktop_file}" in *-terminal.desktop) continue ;; esac
         cp "${desktop_file}" "${HOME}/Desktop/"
         chmod +x "${HOME}/Desktop/$(basename "${desktop_file}")"
     done
 fi
 
-echo "Pixi AI Tools setup complete."
+echo "Pixi AI Tools setup complete. Run 'ai-tools list' to see the environments."

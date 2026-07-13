@@ -22,10 +22,18 @@
 
   vars:
     pixi_ai_tools_version: "{{ lookup('env', 'PIXI_AI_TOOLS_VERSION') | default('master', true) }}"
+    # Comma-separated tool list to pre-install, or "all". Tools that are not
+    # pre-installed get no shared kernel — users cannot install into /opt.
+    pixi_ai_tools_preload: "{{ lookup('env', 'PIXI_AI_TOOLS_PRELOAD') | default('all', true) }}"
     pixi_home: /usr/local
     pixi_bin: /usr/local/bin/pixi
-    jupyterhub_venv: /etc/src/venv/src-venv
     runonce_dir: /etc/runonce.d
+    repo_url: https://github.com/Leiden-Cell-Observatory/AI_tools_pixi.git
+    # One shared, root-owned copy of the tools + one shared package cache.
+    # Per-user clones would multiply 5-10 GB per env by the number of students.
+    shared_dir: /opt/AI_tools_pixi
+    pixi_cache_dir: /opt/pixi-cache
+    system_kernel_dir: /usr/local/share/jupyter/kernels
 
   tasks:
     - name: Wait for system to become reachable
@@ -142,21 +150,205 @@
       when: nvidia_gpu.rc != 0
 
     # ----------------------------------------------------------------
+    # Phase 4b: Shared tool install + shared package cache
+    #
+    # One root-owned checkout in /opt serves every user, so N students do not
+    # each build their own 5-10 GB copy of every environment. The package cache
+    # is shared too: pixi hardlinks package files out of it, so a user who forks
+    # an environment to add packages pays only a fraction of its apparent size.
+    #
+    # The cache must be writable by users (pixi opens repodata read-write, and
+    # `pixi add` downloads new packages), but root writes it first during
+    # preload. A default ACL for the workspace group keeps files created by
+    # either party group-writable, which plain 1777 does not.
+    # ----------------------------------------------------------------
+    - name: Install ACL tooling
+      ansible.builtin.apt:
+        name: acl
+        state: present
+
+    - name: Determine the shared workspace group
+      ansible.builtin.stat:
+        path: /etc/skel
+      register: skel_stat
+
+    - name: Discover the primary group shared by workspace users
+      ansible.builtin.shell:
+        cmd: >-
+          getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 && $6 ~ /^\/home\//
+          { print $4 }' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}'
+      register: co_gid_raw
+      changed_when: false
+
+    - name: Set workspace group fact
+      ansible.builtin.set_fact:
+        workspace_gid: "{{ co_gid_raw.stdout | trim }}"
+
+    - name: Create shared pixi cache directory
+      ansible.builtin.file:
+        path: "{{ pixi_cache_dir }}"
+        state: directory
+        owner: root
+        group: "{{ workspace_gid | default(omit) }}"
+        mode: "2775"
+
+    - name: Export shared pixi cache to all login shells
+      ansible.builtin.lineinfile:
+        path: /etc/environment
+        regexp: '^PIXI_CACHE_DIR='
+        line: "PIXI_CACHE_DIR={{ pixi_cache_dir }}"
+        create: true
+        mode: "0644"
+
+    - name: Clone AI_tools_pixi to the shared location
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ shared_dir }}"
+        version: "{{ pixi_ai_tools_version }}"
+        depth: 1
+        force: false
+      become: true
+
+    - name: Make the shared checkout world-readable
+      ansible.builtin.file:
+        path: "{{ shared_dir }}"
+        state: directory
+        mode: "u=rwX,go=rX"
+        recurse: true
+
+    - name: Discover tools in the shared checkout
+      ansible.builtin.find:
+        paths: "{{ shared_dir }}"
+        patterns: pixi.toml
+        recurse: true
+        depth: 2
+        file_type: file
+      register: shared_manifests
+
+    - name: Build the list of tools to pre-install
+      ansible.builtin.set_fact:
+        all_tools: "{{ shared_manifests.files | map(attribute='path') | map('dirname') | map('basename') | sort }}"
+
+    - name: Resolve the preload selection
+      ansible.builtin.set_fact:
+        preload_tools: >-
+          {{ all_tools if pixi_ai_tools_preload | lower == 'all'
+             else (pixi_ai_tools_preload.split(',') | map('trim') | select('in', all_tools) | list) }}
+
+    - name: Report preload selection
+      ansible.builtin.debug:
+        msg: >-
+          Pre-installing shared environments: {{ preload_tools | join(', ') | default('(none)', true) }}.
+          Available: {{ all_tools | join(', ') }}.
+          Only pre-installed tools get a shared Jupyter kernel — users cannot write to {{ shared_dir }}.
+
+    # The long pole of the deploy. Runs once, before any student logs in.
+    - name: Pre-install shared pixi environments
+      ansible.builtin.command:
+        cmd: "{{ pixi_bin }} install --manifest-path {{ shared_dir }}/{{ item }}/pixi.toml"
+        creates: "{{ shared_dir }}/{{ item }}/.pixi/envs/default/conda-meta"
+      environment:
+        PIXI_CACHE_DIR: "{{ pixi_cache_dir }}"
+      loop: "{{ preload_tools }}"
+
+    - name: Grant the workspace group write access to the shared cache
+      ansible.builtin.command:
+        cmd: >-
+          setfacl -R -m g:{{ workspace_gid }}:rwX -m d:g:{{ workspace_gid }}:rwX
+          {{ pixi_cache_dir }}
+      when: workspace_gid | length > 0
+      changed_when: true
+
+    - name: Create system-wide kernel directories
+      ansible.builtin.file:
+        path: "{{ system_kernel_dir }}/pixi-{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ preload_tools }}"
+
+    # System-wide kernels are visible to every user at first login, with no
+    # per-user registration step. --frozen means "use the lock file as-is":
+    # no solve, no write to /opt, and a kernel that starts in seconds instead
+    # of timing out behind a multi-GB install.
+    - name: Register system-wide Jupyter kernels for the shared environments
+      ansible.builtin.copy:
+        dest: "{{ system_kernel_dir }}/pixi-{{ item }}/kernel.json"
+        mode: "0644"
+        content: |
+          {
+            "argv": [
+              "{{ pixi_bin }}",
+              "run",
+              "--frozen",
+              "--manifest-path", "{{ shared_dir }}/{{ item }}/pixi.toml",
+              "python", "-m", "ipykernel_launcher",
+              "-f", "{connection_file}"
+            ],
+            "display_name": "{{ item }} (Pixi, shared)",
+            "language": "python",
+            "env": {
+              "PIXI_CACHE_DIR": "{{ pixi_cache_dir }}"
+            }
+          }
+      loop: "{{ preload_tools }}"
+
+    # Kernelspecs in a user's ~/.local/share/jupyter/kernels take precedence over
+    # the system ones with the same name. An earlier version of this component
+    # registered per-user pixi-<tool> kernels pointing at a per-user clone; left
+    # in place they shadow the shared kernels and each one would still kick off a
+    # private multi-GB install. Only kernels that reference a per-user
+    # ~/AI_tools_pixi path are removed; personal forks (pixi-<tool>-mine) are kept.
+    - name: Remove per-user kernelspecs left behind by the older per-user design
+      ansible.builtin.shell:
+        cmd: |
+          removed=0
+          for k in /home/*/.local/share/jupyter/kernels/pixi-*; do
+            [ -d "$k" ] || continue
+            case "$k" in *-mine) continue ;; esac
+            if grep -qE '"/home/[^/]+/AI_tools_pixi' "$k/kernel.json" 2>/dev/null; then
+              rm -rf "$k"
+              removed=$((removed + 1))
+            fi
+          done
+          echo "removed=${removed}"
+      register: stale_kernels
+      changed_when: "'removed=0' not in stale_kernels.stdout"
+
+    - name: Install the ai-tools helper for users who need to add packages
+      ansible.builtin.copy:
+        src: files/ai-tools
+        dest: /usr/local/bin/ai-tools
+        mode: "0755"
+        owner: root
+        group: root
+
+    # ----------------------------------------------------------------
     # Phase 5: JupyterHub integration (conditional)
     # ----------------------------------------------------------------
-    - name: Check if JupyterHub venv exists
-      ansible.builtin.stat:
-        path: "{{ jupyterhub_venv }}/bin/pip"
-      register: jupyterhub_pip
+    # SRC ships two venvs under /etc/src/venv: src-venv (Ansible/tooling) and
+    # jupyter-venv (the one JupyterHub actually spawns single-user servers from).
+    # Locate the venv that owns jupyterhub-singleuser rather than assuming a name.
+    - name: Locate the JupyterHub single-user launcher
+      ansible.builtin.find:
+        paths: /etc/src/venv
+        patterns: jupyterhub-singleuser
+        recurse: true
+        file_type: file
+      register: singleuser_launcher
 
-    - name: Install pixi-kernel into JupyterHub venv
-      when: jupyterhub_pip.stat.exists
+    - name: Set single-user venv fact
+      when: singleuser_launcher.matched > 0
+      ansible.builtin.set_fact:
+        jupyterhub_venv: "{{ singleuser_launcher.files[0].path | dirname | dirname }}"
+
+    - name: Install pixi-kernel into the JupyterHub single-user venv
+      when: singleuser_launcher.matched > 0
       ansible.builtin.pip:
         name: pixi-kernel
         virtualenv: "{{ jupyterhub_venv }}"
 
     - name: Deploy runonce wrapper script for JupyterHub pre-spawn
-      when: jupyterhub_pip.stat.exists
+      when: singleuser_launcher.matched > 0
       ansible.builtin.copy:
         src: files/run-runonce.sh
         dest: /usr/local/bin/run-runonce.sh
@@ -165,13 +357,17 @@
         group: root
 
     - name: Check if JupyterHub config exists
-      when: jupyterhub_pip.stat.exists
+      when: singleuser_launcher.matched > 0
       ansible.builtin.stat:
         path: /etc/jupyterhub/jupyterhub_config.py
       register: jupyterhub_config
 
-    - name: Add pre_spawn_hook to JupyterHub config for runonce
-      when: jupyterhub_pip.stat.exists and jupyterhub_config.stat.exists
+    # This block is appended after SRC's own settings, so the c.Spawner.args
+    # assignment here is the one that wins. SRC restricts the launcher to a
+    # single kernel with --KernelSpecManager.whitelist={'src-default'}, which
+    # silently hides every pixi kernel; we re-open it.
+    - name: Add pre-spawn hook and lift the kernel allowlist in JupyterHub config
+      when: singleuser_launcher.matched > 0 and jupyterhub_config.stat.exists
       ansible.builtin.blockinfile:
         path: /etc/jupyterhub/jupyterhub_config.py
         marker: "# {mark} PIXI-AI-TOOLS PRE-SPAWN HOOK"
@@ -190,8 +386,10 @@
                   )
           c.Spawner.pre_spawn_hook = pre_spawn_hook
 
-    - name: Restart JupyterHub to pick up pixi-kernel and pre-spawn hook
-      when: jupyterhub_pip.stat.exists
+          c.Spawner.args = ["--KernelSpecManager.ensure_native_kernel=False"]
+
+    - name: Restart JupyterHub to pick up pixi-kernel and config changes
+      when: singleuser_launcher.matched > 0
       ansible.builtin.systemd:
         name: jupyterhub
         state: restarted
@@ -201,11 +399,11 @@
     - name: Display JupyterHub integration status
       ansible.builtin.debug:
         msg: >-
-          {% if jupyterhub_pip.stat.exists %}
-          pixi-kernel installed into JupyterHub venv. Pre-spawn hook
-          configured to run runonce scripts before notebook server starts.
-          Users can select tool kernels from the JupyterLab launcher
-          immediately — no terminal login required.
+          {% if singleuser_launcher.matched > 0 %}
+          pixi-kernel installed into {{ jupyterhub_venv }}. Pre-spawn hook
+          configured to run runonce scripts before the notebook server starts,
+          and the single-user kernel allowlist has been lifted so pixi kernels
+          appear in the JupyterLab launcher.
           {% else %}
           JupyterHub not detected — skipping pixi-kernel installation.
           Users can use 'pixi shell' from the terminal instead.
