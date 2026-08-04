@@ -2,11 +2,13 @@
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
 channels = ["conda-forge"]
 name = "biapy"
-platforms = ["win-64","linux-64"]
+platforms = [
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.8" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.8" },
+  { name = "win-64-cpu", platform = "win-64" },
+]
 version = "0.1.0"
-
-[system-requirements]
-cuda = "12.8"
 
 [dependencies]
 python = "3.12.*"
