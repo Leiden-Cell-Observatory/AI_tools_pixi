@@ -2,16 +2,13 @@
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
 channels = ["conda-forge"]
 name = "cellpose"
-platforms = ["win-64","linux-64"]
+platforms = [{ platform = "win-64", cuda = "12.8" }, { platform = "linux-64", cuda = "12.8" }]
 version = "0.1.0"
 
 [dependencies]
 python = "3.11.*"
 #pytorch = ">=2.7.1,<3"
 jupyter = ">=1.1.1,<2"
-
-[system-requirements]
-cuda = "12.8"
 
 [pypi-dependencies]
 cellpose = { version = ">=4.2.0, <5", extras = ["gui"] }

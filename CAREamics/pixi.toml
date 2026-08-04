@@ -2,14 +2,15 @@
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
 channels = ["conda-forge"]
 name = "CAREamics"
-platforms = ["win-64","linux-64"]
+platforms = [{ platform = "win-64", cuda = "12.8" }, { platform = "linux-64", cuda = "12.8" }]
 version = "0.1.0"
 
-#250912 Does not work, issues with pytorch, careamics not matching requirment for pillow
 [tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
 
-[system-requirements]
-cuda = "12.8"
+[tasks.test-plugins]
+cmd = "python -c \"import napari, npe2; pm = npe2.PluginManager.instance(); pm.discover(); names = [m.name for m in pm.iter_manifests()]; print('discovered plugins:', names); assert 'careamics-napari' in names, 'careamics-napari plugin not discovered'; v = napari.Viewer(show=False); v.close(); print('PLUGIN TEST PASSED')\""
+env = { QT_QPA_PLATFORM = "offscreen" }
 
 [dependencies]
 python = "==3.11"
@@ -28,11 +29,12 @@ pyimagej = ">=1.7.0, <2"
 
 [pypi-dependencies]
 pillow = "<11.3"
-careamics = { version = "==0.0.16", extras = ["examples"] }
+careamics = { version = "==0.3.0", extras = ["examples"] }
 torch = "*"
 torchvision = "*"
-napari = ">=0.6.5, <0.7"
-careamics-napari = ">=0.0.13, <0.0.14"
+napari = ">=0.8.0, <0.9"
+careamics-napari = "==0.3.0"
+npe2 = ">=0.8.2"
 
 [pypi-options]
 extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
