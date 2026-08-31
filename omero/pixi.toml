@@ -16,3 +16,5 @@ jupyter = ">=1.1.1,<2"
 napari = { version = ">=0.6.5, <0.7", extras = ["all"] }
 omero-py = "==5.21.1"
 napari-omero = { version = ">=0.5.1, <0.6", extras = ["all"] }
+ezomero = ">=3.2.0, <4"
+matplotlib = ">=3.11.1, <4"
