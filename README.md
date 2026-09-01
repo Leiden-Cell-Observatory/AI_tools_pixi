@@ -229,16 +229,22 @@ pixi init
 pixi add python=3.12
 # or: pixi add python=3.11, python=3.10, etc.
 
-# 3. Add conda packages (from conda-forge)
+# 3. Declare a CUDA requirement BEFORE adding pytorch, or you get the CPU build.
+#    `edit` attaches it to the platform pixi init already detected;
+#    `add` brings in a second platform (named, because it carries a requirement).
+pixi workspace platform edit win-64 --cuda 12.8
+pixi workspace platform add linux-64-cuda=linux-64 --cuda 12.8
+
+# 4. Add conda packages (from conda-forge)
 pixi add numpy pandas matplotlib
 pixi add pytorch torchvision
 
-# 4. Add PyPI packages (from PyPI)
+# 5. Add PyPI packages (from PyPI)
 pixi add --pypi scikit-learn
 pixi add --pypi transformers
 pixi add --pypi napari-omero
 
-# 5. Start using your environment
+# 6. Start using your environment
 pixi shell              # Activate environment
 pixi run python         # Run Python directly
 pixi run jupyter lab    # Run Jupyter (if added)
@@ -277,7 +283,10 @@ Each environment has a `pixi.lock` file that ensures **reproducibility**:
 
 ### Platform Support
 
+The `platforms` list in `[workspace]` declares which operating systems the lock file is solved for:
+
 ```toml
+[workspace]
 platforms = ["win-64", "linux-64"]
 ```
 
@@ -293,6 +302,125 @@ Common platforms:
 - `osx-64`: macOS Intel
 - `osx-arm64`: macOS Apple Silicon
 
+## 🖥️ System Requirements (CUDA, glibc, macOS)
+
+A **system requirement** tells the solver what the target machine provides: a CUDA driver, a glibc version, a minimum macOS release. Pixi models these as *virtual packages* — `__cuda`, `__glibc`, `__osx`, `__linux`, `__win`, `__archspec` — and matches them against the constraints declared by conda packages.
+
+This matters most for GPU work: **without a CUDA requirement, conda-forge hands you the CPU build of PyTorch**, and `pixi run test-cuda` reports `CUDA available: False`.
+
+### ⚠️ New syntax: declare requirements on `platforms`
+
+The `[system-requirements]` table is **deprecated**. Requirements are now declared *per platform*, inline in `[workspace].platforms`. Old manifests still parse, but pixi warns:
+
+```
+⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+  declare these on the `platforms` entries instead
+```
+
+**Before** (deprecated):
+
+```toml
+[workspace]
+platforms = ["win-64", "linux-64"]
+
+[system-requirements]
+cuda = "12.8"
+```
+
+**After** (current — used throughout this repository):
+
+```toml
+[workspace]
+platforms = [
+  { platform = "win-64", cuda = "12.8" },
+  { platform = "linux-64", cuda = "12.8" },
+]
+```
+
+**Used in**: cellpose, CAREamics
+
+Recognised keys on a platform entry: `cuda`, `glibc`, `linux`, `macos`, `windows`, `archspec`. GPU compute capability is expressed by expanding `cuda` into a table — `cuda = { driver = "12.8", arch = "8.6" }`. For anything without a friendly name, the raw form `__name = "version"` also works.
+
+**Defaults when you declare nothing**: `linux-64` assumes `__linux = "4.18"` and `__glibc = "2.28"`; macOS assumes `__osx = "13.0"`; Windows has no defaults. CUDA is *never* assumed — you always have to ask for it.
+
+### Named platform variants (GPU and CPU side by side)
+
+Give a platform entry a `name` and you can list the same OS twice with different requirements — one CUDA-enabled, one plain — then point features at whichever variant they need:
+
+```toml
+[workspace]
+platforms = [
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.8" },
+  { name = "linux-64-cpu",  platform = "linux-64" },
+  { name = "win-64-cuda",   platform = "win-64", cuda = "12.8" },
+  { name = "win-64-cpu",    platform = "win-64" },
+]
+```
+
+**Used in**: biapy, micro_sam, trackastra, spotiflow
+
+The `name` is what features and environments refer to; `platform` is the actual conda subdir that packages are downloaded for. Restrict a feature to a variant with its own `platforms` key:
+
+```toml
+[feature.gpu]
+platforms = ["linux-64-cuda", "win-64-cuda"]
+
+[feature.gpu.dependencies]
+pytorch = ">=2.7.1,<3"
+
+[environments]
+default = { features = ["gpu"] }
+```
+
+This replaces the old `[feature.<name>.system-requirements]` table, and it is also how the AMD/ROCm environments work: the plain `linux-64` entry declares no `__cuda`, so a ROCm feature resolves against it while the CUDA feature targets `linux-64-cuda`.
+
+### Inspecting and editing platforms
+
+```powershell
+# Show every platform with its virtual packages, plus what pixi detected on this machine
+pixi workspace platform list
+
+# Add a plain platform
+pixi workspace platform add osx-arm64
+
+# Add a platform that carries a requirement -- this needs the <name>=<subdir> form,
+# a bare subdir is rejected when any virtual package is given
+pixi workspace platform add linux-64-cuda=linux-64 --cuda 12.8
+
+# Attach a requirement to a platform that already exists (produces the unnamed
+# `{ platform = "...", cuda = "..." }` form)
+pixi workspace platform edit linux-64 --cuda 12.8
+pixi workspace platform edit osx-arm64 --macos 13.5
+
+# Remove one
+pixi workspace platform remove win-64-cpu
+```
+
+`pixi workspace platform list` prints the detected host first, which is the fastest way to see why a solve picked CPU builds:
+
+```
+Your current machine was detected as:
+    platform=linux-64, archspec=zen4, glibc=2.43, linux=7.1.6
+
+Platforms:
+linux-64-cuda: platform=linux-64, cuda=12.8
+    Used in environments: default
+```
+
+Note: `pixi workspace platform` keeps `pixi.lock` in sync automatically. The older `pixi workspace system-requirements` subcommand has been removed.
+
+### Overriding detection
+
+To solve or install for a machine other than the one you are sitting at — building a CUDA environment on a laptop with no GPU, for example — set the conda override variables:
+
+```bash
+CONDA_OVERRIDE_CUDA=12.8 pixi install
+```
+
+Also available: `CONDA_OVERRIDE_CUDA_ARCH`, `CONDA_OVERRIDE_GLIBC`, `CONDA_OVERRIDE_OSX`, `CONDA_OVERRIDE_LINUX`, `CONDA_OVERRIDE_WIN`, `CONDA_OVERRIDE_ARCHSPEC`. Setting one to an empty string *disables* that virtual package rather than pinning a version.
+
+📖 Full reference: <https://pixi.prefix.dev/dev/workspace/system_requirements/>
+
 ## ⚠️ PyTorch Installation Challenges (Especially on Windows)
 
 PyTorch with CUDA can be tricky. Here are two approaches used in this repository:
@@ -302,12 +430,18 @@ PyTorch with CUDA can be tricky. Here are two approaches used in this repository
 Install PyTorch via conda and specify CUDA requirements:
 
 ```toml
+[workspace]
+platforms = [
+  { platform = "win-64", cuda = "12.8" },
+  { platform = "linux-64", cuda = "12.8" },
+]
+
 [dependencies]
 pytorch = ">=2.7.1,<3"
-
-[system-requirements]
-cuda = "12.8"
 ```
+
+The `cuda = "12.8"` on each platform entry is what makes the solver pick the GPU
+build — see [System Requirements](#-system-requirements-cuda-glibc-macos) above.
 
 **Used in**: cellpose, micro_sam, trackastra, biapy
 
@@ -347,7 +481,7 @@ index-strategy = "unsafe-best-match"
 🪟 **Windows users**: PyTorch CUDA support requires:
 1. Compatible NVIDIA GPU
 2. Updated NVIDIA drivers
-3. Matching CUDA toolkit version (handled by pixi via `system-requirements`)
+3. Matching CUDA toolkit version (declared as `cuda = "12.8"` on the `win-64` platform entry)
 4. Correct PyTorch wheel for your CUDA version
 
 **Tip**: Always run `pixi run test-cuda` after installation to verify GPU detection.
@@ -363,7 +497,11 @@ pixi install
 
 ### CUDA Not Detected
 - Ensure NVIDIA drivers are up to date
-- Check system CUDA version matches `pixi.toml` requirements
+- Run `pixi workspace platform list` — it prints the requirements declared in `pixi.toml`
+  *and* what pixi detected on this machine. If the detected `cuda` is missing or lower
+  than the declared one, the solver falls back to CPU builds
+- Check the driver's CUDA version with `nvidia-smi` and compare it to the `cuda = "..."`
+  value on the platform entry
 - Run `pixi run test-cuda` to diagnose
 
 ### Package Conflicts
