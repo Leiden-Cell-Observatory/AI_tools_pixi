@@ -1,4 +1,4 @@
-[project]
+[workspace]
 name = "stardist_napari_windows"
 version = "0.1.0"
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
