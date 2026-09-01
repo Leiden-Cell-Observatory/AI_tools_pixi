@@ -1,6 +1,6 @@
 # AI Tools with Pixi
 
-This repository contains isolated AI/ML environments managed with [Pixi](https://pixi.sh), a modern package manager for scientific computing and data science.
+This repository contains isolated AI/ML environments managed with [Pixi](https://pixi.sh), a modern package manager for scientific computing and data science. All tools are defined in a single `pixi.toml` at the project root using pixi's [multi-environment](https://pixi.sh/latest/workspace/multi_environment/) feature — install only the environments you need.
 
 ## 📦 What is Pixi?
 
@@ -31,117 +31,68 @@ After installation, restart your terminal to use pixi.
 
 For more installation options, visit: https://pixi.sh/dev/installation/
 
-## 📁 Repository Structure
+## 📁 Available Environments
 
-Each folder contains its own isolated pixi environment with specific AI/ML tools:
+All environments are defined in the root `pixi.toml`. Each environment is fully isolated with its own Python version, CUDA requirements, and dependencies.
 
-### **CAREamics/** • [Documentation](https://careamics.github.io/)
-Deep learning-based image restoration and denoising toolkit. Uses CUDA 12.8 with PyTorch.
-- **Purpose**: Image denoising and restoration for microscopy images
-- **Key packages**: careamics, torch, torchvision, bioio
-- **Features**: Multiple environments (default, bioio, imagej)
-
-### **cellpose/** • [Documentation](https://cellpose.readthedocs.io/en/latest/)
-Generalist algorithm for cell and nucleus segmentation with GPU acceleration.
-- **Purpose**: Cell segmentation using deep learning
-- **Key packages**: cellpose 4 with GUI, PyTorch
-- **CUDA**: 12.8
-
-### **micro_sam/** • [Documentation](https://computational-cell-analytics.github.io/micro-sam/micro_sam.html)
-Segment Anything Model (SAM) adapted for microscopy images.
-- **Purpose**: Interactive and automatic segmentation for microscopy using napari
-- **Key packages**: micro_sam, pytorch, napari-omero, trackastra
-- **CUDA**: 12.8
-
-### **biapy/** • [Documentation](https://biapy.readthedocs.io/en/latest/)
-BiaPy - Library for training bioimage analysis AI models.
-- **Purpose**: Training deep learning models for bioimage analysis workflows
-- **Key packages**: biapy, mlflow (for experiment tracking), scikit-learn
-- **Python**: 3.12
-
-### **stardist/** • [GitHub](https://github.com/stardist/stardist)
-Star-convex object detection in microscopy images, especially for segmentation of cell nuclei.
-- **Purpose**: Object detection and instance segmentation
-- **Key packages**: stardist, napari, tensorflow 2.10
-- **CUDA**: 11.8 (older version for TensorFlow compatibility)
-
-### **trackastra/** • [GitHub](https://github.com/weigertlab/trackastra)
-Deep learning-based cell tracking for microscopy time-lapse data.
-- **Purpose**: Cell tracking across time series
-- **Key packages**: trackastra, PyTorch
-- **CUDA**: 12.8
+| Environment | Description | Python | CUDA | Key Packages |
+|---|---|---|---|---|
+| `biapy` | Training bioimage analysis AI models ([docs](https://biapy.readthedocs.io/en/latest/)) | 3.12 | 12.8 | biapy, mlflow, scikit-learn, PyTorch |
+| `cellpose` | Cell and nucleus segmentation ([docs](https://cellpose.readthedocs.io/en/latest/)) | 3.11 | 12.8 | cellpose (with GUI), PyTorch |
+| `stardist` | Star-convex object detection ([GitHub](https://github.com/stardist/stardist)) | 3.10 | 11.8 | stardist, napari, TensorFlow 2.10 |
+| `trackastra` | Deep learning cell tracking ([GitHub](https://github.com/weigertlab/trackastra)) | 3.11 | 12.8 | trackastra, PyTorch |
+| `spotiflow` | Spot detection in microscopy | 3.12 | 12.8 | spotiflow, PyTorch |
+| `omero` | OMERO image data management | 3.10 | — | omero-py, napari, napari-omero |
+| `micro_sam` | Segment Anything for microscopy ([docs](https://computational-cell-analytics.github.io/micro-sam/micro_sam.html)) | 3.11 | 12.8 | micro_sam, PyTorch, trackastra, napari-omero |
+| `careamics` | Image restoration and denoising ([docs](https://careamics.github.io/)) | 3.11 | 12.8 | careamics, torch (PyPI), napari, bioio |
+| `careamics-all` | CAREamics with all optional features | 3.11 | 12.8 | careamics + bioio + pyimagej |
 
 ## 🔧 Using Pixi Environments
 
-### Activating an Environment
+### Quick Start
 
-Navigate to any folder and activate its environment:
+From the repository root, install and activate any environment:
 
 ```powershell
-cd cellpose
-#optionally run first
-pixi install
+# Install a specific environment (only downloads what you need)
+pixi install -e cellpose
 
-pixi shell
+# Activate a shell with that environment
+pixi shell -e cellpose
+
+# Or run a command directly
+pixi run -e cellpose python your_script.py
 ```
 
-This starts an interactive shell with all dependencies available. To exit, type `exit`.
+> **Important**: Always use `pixi install -e <name>` to install a specific environment.
+> Running `pixi install` without `-e` will attempt to install ALL environments.
 
 ### Running Applications
 
-Each environment can run specific applications using pixi tasks:
-
 ```powershell
-# In the cellpose folder
-pixi run cellpose          # Launch Cellpose GUI
-
-# In the stardist folder  
-pixi run napari           # Launch Napari viewer
+# Launch Cellpose GUI
+pixi run -e cellpose python -m cellpose
 
 # Run Python in any environment
-pixi run python           # Starts Python with all packages available
+pixi run -e micro_sam python
+
+# Run a script
+pixi run -e biapy python train.py
 ```
 
 ### Working with Jupyter Notebooks
 
-Most environments include Jupyter support for interactive data analysis and experimentation:
+Most environments include Jupyter support:
 
 ```powershell
-# Navigate to any folder with Jupyter support
-cd CAREamics
-# or: cd cellpose, micro_sam, biapy
+# Launch Jupyter Lab with the careamics environment
+pixi run -e careamics jupyter lab
 
-# Launch Jupyter Lab with the correct Python environment
-pixi run jupyter lab
+# Or with cellpose, micro_sam, biapy, trackastra, spotiflow...
+pixi run -e cellpose jupyter lab
 ```
 
-**Environments with Jupyter**:
-- ✅ CAREamics
-- ✅ cellpose  
-- ✅ micro_sam
-- ✅ biapy
-- ✅ stardist (via jupyter-client)
-- ✅ trackastra
-
-**Benefits**:
-- 📓 Notebooks automatically use the correct Python environment
-- 📦 All packages from `pixi.toml` are available in notebooks
-- 🔬 Perfect for experimentation, visualization, and interactive analysis
-- 🎯 No need to manually select kernels or worry about environment mismatches
-
-### Running Custom Scripts
-
-```powershell
-# Navigate to the project folder
-cd micro_sam
-
-# Run Python scripts directly
-pixi run python your_script.py
-
-# Or activate the shell first
-pixi shell
-python your_script.py
-```
+**Environments with Jupyter**: biapy, cellpose, micro_sam, trackastra, spotiflow, careamics, stardist (via jupyter-client)
 
 ## Using with Fiji plugins
 These pixi environments can be used as well as replacement for setting up a conda environment for Fiji plugins requiring a conda environment to run Python tools such as Cellpose and Spotiflow.
@@ -152,146 +103,105 @@ For example they work with: https://github.com/BIOP/ijl-utilities-wrappers.
 Most environments include a `test-cuda` task to verify GPU setup:
 
 ```powershell
-# In any folder with CUDA support
-pixi run test-cuda
+pixi run -e cellpose test-cuda
+pixi run -e biapy test-cuda
+pixi run -e micro_sam test-cuda
 ```
 
-This command checks:
-- ✅ CUDA availability
-- 🔢 CUDA version
-- 🖥️ GPU device count and name
+This checks CUDA availability, version, device count, and GPU name.
 
-### Example: Testing StarDist
+### Testing StarDist
 
 ```powershell
-cd stardist
-pixi run test-stardist
+pixi run -e stardist test-stardist
 ```
 
 This runs `stardist_test.py` to verify the installation and GPU configuration.
 
-## 📋 Understanding Pixi Tasks
+## 📋 Tasks
 
-Tasks are custom commands defined in `pixi.toml` files. They make common operations easy:
+Tasks are defined per-environment in the `pixi.toml`:
 
-### Common Tasks
+| Task | Environments | Description |
+|---|---|---|
+| `test-cuda` | biapy, cellpose, trackastra, spotiflow, micro_sam | Verify PyTorch CUDA setup |
+| `test-stardist` | stardist | Test StarDist installation |
 
-- **`test-cuda`**: Verifies PyTorch CUDA setup (available in: cellpose, micro_sam, trackastra, CAREamics, biapy)
-- **`test-stardist`**: Tests StarDist installation and runs example code
-
-### Viewing Available Tasks
-
+Run any task with:
 ```powershell
-cd <project-folder>
-pixi task list
+pixi run -e <environment> <task-name>
 ```
 
-### Running Tasks
+## 💡 How It Works
 
-```powershell
-pixi run <task-name>
+### Multi-Environment Architecture
+
+All tools are defined in a single `pixi.toml` using pixi's [feature/environment](https://pixi.sh/latest/workspace/multi_environment/) system:
+
+- Each tool is a **feature** containing all its dependencies (Python version, CUDA, packages)
+- Each tool maps to an **environment** with `no-default-feature = true` (complete isolation)
+- Environments don't share dependencies — different Python versions and CUDA versions coexist
+
 ```
-
-Tasks can be simple commands or complex scripts. Check each folder's `pixi.toml` to see available tasks.
-
-## 💡 Understanding Pixi Environments
-
-### How Pixi Environments Work
-
-Each folder in this repository has its own **isolated environment**:
-
-- 📁 **Folder-based**: Each project folder contains a `pixi.toml` configuration file
-- 🐍 **Isolated Python**: Python and all dependencies are installed in a `.pixi` folder within each project
-- 🔒 **No conflicts**: Different projects can use different Python versions and package versions
-- 🚫 **No global installation**: Environments don't interfere with your system Python or other projects
-
-**Example structure**:
-```
-cellpose/
-  ├── pixi.toml          # Configuration file
-  ├── pixi.lock          # Lock file for reproducibility
-  └── .pixi/             # Environment folder (created automatically)
+AI_tools_pixi/
+  ├── pixi.toml           # All environments defined here
+  ├── pixi.lock           # Lock file for all environments
+  └── .pixi/
       └── envs/
-          └── default/   # Python and packages installed here
+          ├── biapy/      # Python 3.12 + CUDA 12.8
+          ├── cellpose/   # Python 3.11 + CUDA 12.8
+          ├── stardist/   # Python 3.10 + CUDA 11.8
+          └── ...         # Only installed envs appear here
 ```
 
-### Creating Your Own Pixi Environment
+### Adding a New Tool
 
-Want to create a new AI tool environment? Here's how:
+To add a new AI tool, add a feature and environment to `pixi.toml`:
 
-```powershell
-# 1. Create a new folder and initialize pixi
-mkdir my_project
-cd my_project
-pixi init
+```toml
+# Define the feature with all dependencies
+[feature.my_tool.dependencies]
+python = "3.12.*"
+pytorch = ">=2.7.1,<3"
+jupyter = ">=1.1.1,<2"
 
-# 2. Add Python (specify your desired version)
-pixi add python=3.12
-# or: pixi add python=3.11, python=3.10, etc.
+[feature.my_tool.system-requirements]
+cuda = "12.8"
 
-# 3. Add conda packages (from conda-forge)
-pixi add numpy pandas matplotlib
-pixi add pytorch torchvision
+[feature.my_tool.pypi-dependencies]
+my-package = ">=1.0, <2"
 
-# 4. Add PyPI packages (from PyPI)
-pixi add --pypi scikit-learn
-pixi add --pypi transformers
-pixi add --pypi napari-omero
+[feature.my_tool.tasks]
+test-cuda = "python -c \"import torch; print(torch.cuda.is_available())\""
 
-# 5. Start using your environment
-pixi shell              # Activate environment
-pixi run python         # Run Python directly
-pixi run jupyter lab    # Run Jupyter (if added)
+# Register the environment
+[environments]
+# ... existing environments ...
+my_tool = { features = ["my_tool"], no-default-feature = true }
 ```
+
+Then install with `pixi install -e my_tool`.
 
 ### Conda vs PyPI Packages
 
-**When to use `pixi add` (conda)**:
-- ✅ System libraries and compiled packages (CUDA, OpenCV, etc.)
-- ✅ Python itself and major scientific packages (numpy, scipy, pytorch)
-- ✅ Generally faster and more reliable dependency resolution
+**When to use conda** (`[feature.<name>.dependencies]`):
+- System libraries and compiled packages (CUDA, OpenCV, etc.)
+- Python itself and major scientific packages (numpy, scipy, pytorch)
+- Generally faster and more reliable dependency resolution
 
-**When to use `pixi add --pypi` (PyPI)**:
-- ✅ Python-only packages not available in conda-forge
-- ✅ Latest versions of packages that update frequently
-- ✅ Packages specifically requiring pip installation
-
-### How Pixi Resolves Dependencies
-
-**Important**: Pixi resolves dependencies in a specific order:
-1. **First**: Conda packages from conda-forge
-2. **Then**: PyPI packages with pip
-
-This means conda packages take priority. If you need a specific version from PyPI, ensure it's not being overridden by a conda package.
+**When to use PyPI** (`[feature.<name>.pypi-dependencies]`):
+- Python-only packages not available in conda-forge
+- Latest versions of packages that update frequently
+- Packages specifically requiring pip installation
 
 ### Lock Files (`pixi.lock`)
 
-Each environment has a `pixi.lock` file that ensures **reproducibility**:
+The repository has a single `pixi.lock` file that covers all environments:
 
-- 📸 **Snapshot**: Contains exact versions of ALL dependencies (including transitive dependencies)
-- 🔒 **Locked versions**: Anyone running `pixi install` gets the identical environment
-- 🌐 **Cross-platform**: Includes platform-specific dependency resolution
-- ♻️ **Update control**: Dependencies only change when you run `pixi update` or modify `pixi.toml`
-
-**Think of it as**: A detailed receipt of your exact environment that guarantees the same setup on any machine.
-
-### Platform Support
-
-```toml
-platforms = ["win-64", "linux-64"]
-```
-
-This declaration:
-- ✅ Generates lock file entries for **both Windows and Linux** (64-bit)
-- 🖥️ Allows the same `pixi.toml` to work on both platforms
-- 🔄 Enables collaboration across different operating systems
-- 📦 Pixi automatically uses the correct platform when installing
-
-Common platforms:
-- `win-64`: Windows 64-bit
-- `linux-64`: Linux 64-bit  
-- `osx-64`: macOS Intel
-- `osx-arm64`: macOS Apple Silicon
+- Contains exact versions of ALL dependencies (including transitive) for every environment
+- Anyone running `pixi install -e <env>` gets an identical environment
+- Includes platform-specific resolution for both Windows and Linux
+- Dependencies only change when you run `pixi update` or modify `pixi.toml`
 
 ## ⚠️ PyTorch Installation Challenges (Especially on Windows)
 
@@ -356,18 +266,18 @@ index-strategy = "unsafe-best-match"
 
 ### Environment Issues
 ```powershell
-# Clean and reinstall
+# Clean and reinstall a specific environment
 pixi clean
-pixi install
+pixi install -e cellpose
 ```
 
 ### CUDA Not Detected
 - Ensure NVIDIA drivers are up to date
-- Check system CUDA version matches `pixi.toml` requirements
-- Run `pixi run test-cuda` to diagnose
+- Check system CUDA version matches the environment's requirements
+- Run `pixi run -e <env> test-cuda` to diagnose
 
 ### Package Conflicts
-- Check `pixi.toml` for version constraints
+- Check the relevant feature section in `pixi.toml` for version constraints
 - Update pixi: `pixi self-update`
 
 ## 🤝 Contributing

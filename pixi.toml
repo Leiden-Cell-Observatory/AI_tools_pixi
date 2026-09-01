@@ -1,0 +1,300 @@
+# =============================================================================
+# Unified AI Tools Pixi Configuration
+# =============================================================================
+# This single pixi.toml manages all AI/ML tool environments.
+# Install only the environments you need for your project:
+#
+#   pixi install -e cellpose
+#   pixi shell -e cellpose
+#
+# Or run tasks directly:
+#
+#   pixi run -e cellpose test-cuda
+#
+# =============================================================================
+
+[workspace]
+authors = ["Maarten Paul <maarten.paul@gmail.com>"]
+channels = ["conda-forge"]
+name = "ai-tools-pixi"
+platforms = ["win-64", "linux-64"]
+version = "0.1.0"
+
+# =============================================================================
+# FEATURES — each tool is a self-contained feature
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# BiaPy — training bioimage analysis AI models
+# Docs: https://biapy.readthedocs.io/en/latest/
+# -----------------------------------------------------------------------------
+[feature.biapy.dependencies]
+python = "3.12.*"
+pandas = ">=2.3.3,<3"
+scikit-learn = ">=1.7.2,<2"
+jupyter = ">=1.1.1,<2"
+pytorch = ">=2.7.1,<3"
+
+[feature.biapy.system-requirements]
+cuda = "12.8"
+
+[feature.biapy.pypi-dependencies]
+mlflow = ">=3.4.0, <4"
+biapy = ">=3.6.5, <4"
+
+[feature.biapy.tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import biapy; import torch; import sklearn; print(f'biapy OK, torch {torch.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# Cellpose — cell and nucleus segmentation
+# Docs: https://cellpose.readthedocs.io/en/latest/
+# -----------------------------------------------------------------------------
+[feature.cellpose.dependencies]
+python = "3.11.*"
+pytorch = ">=2.7.1,<3"
+jupyter = ">=1.1.1,<2"
+
+[feature.cellpose.system-requirements]
+cuda = "12.8"
+
+[feature.cellpose.pypi-dependencies]
+cellpose = { version = ">=4.0.6, <5", extras = ["gui"] }
+
+[feature.cellpose.tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import cellpose; import torch; print(f'cellpose {cellpose.__version__}, torch {torch.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# StarDist — star-convex object detection (nuclei segmentation)
+# GitHub: https://github.com/stardist/stardist
+# NOTE: Uses CUDA 11.8 / TensorFlow 2.10 (older stack)
+# -----------------------------------------------------------------------------
+[feature.stardist.dependencies]
+python = "3.10.*"
+cudatoolkit = "11.8.*"
+cudnn = "8.1.0.*"
+
+[feature.stardist.pypi-dependencies]
+# Core dependencies
+tensorflow = "==2.10.1"
+stardist = "==0.9.1"
+gputools = "==0.2.15"
+numpy = "==1.26.0"
+
+# Napari and GUI
+napari = {version = "==0.5.4", extras = ["all", "optional", "pyqt", "pyqt5"]}
+napari-console = "==0.1.1"
+napari-plugin-engine = "==0.2.0"
+napari-plugin-manager = "==0.1.3"
+napari-svg = "==0.2.0"
+pyqt5 = "==5.15.11"
+pyqt5-sip = "==12.15.0"
+qtconsole = "==5.6.1"
+qtpy = "==2.4.2"
+magicgui = "==0.9.1"
+superqt = {version = "==0.6.7", extras = ["iconify"]}
+
+# Scientific computing
+scipy = "==1.14.1"
+scikit-image = {version = "==0.24.0", extras = ["data"]}
+pandas = "==2.2.3"
+matplotlib = ">=3.10.6, <4"
+csbdeep = "==0.8.1"
+
+# Image processing
+imageio = "==2.36.0"
+tifffile = "==2024.9.20"
+edt = "==2.4.1"
+
+# Visualization
+vispy = "==0.14.3"
+pyopengl = "==3.1.7"
+
+# Data handling
+dask = {version = "==2024.11.2", extras = ["array"]}
+zarr = "==2.18.3"
+h5py = "==3.12.1"
+
+# TensorFlow related
+tensorboard = "==2.10.1"
+keras = "==2.10.0"
+tensorflow-estimator = "==2.10.0"
+
+# Jupyter/IPython
+ipykernel = "==6.29.5"
+ipython = "==8.29.0"
+jupyter-client = "==8.6.3"
+
+# GPU/CUDA processing
+pyopencl = "==2024.3"
+reikna = "==0.8.0"
+numba = "==0.60.0"
+
+# Utilities
+pydantic = "==2.9.2"
+app-model = "==0.3.0"
+npe2 = "==0.7.7"
+typer = "==0.13.0"
+click = "==8.1.7"
+rich = "==13.9.4"
+tqdm = "==4.67.0"
+pyyaml = "==6.0.2"
+psutil = "==6.1.0"
+pooch = "==1.8.2"
+pint = "==0.24.4"
+
+# Development tools
+sphinx = "==8.1.3"
+numpydoc = "==1.8.0"
+
+# Supporting libraries
+pillow = "==11.0.0"
+requests = "==2.32.3"
+certifi = "==2024.8.30"
+networkx = "==3.4.2"
+wrapt = "==1.16.0"
+packaging = "==24.2"
+typing-extensions = "==4.12.2"
+traitlets = "==5.14.3"
+psygnal = "==0.11.1"
+in-n-out = "==0.2.1"
+jupyter = ">=1.1.1, <2"
+
+[feature.stardist.tasks]
+test-stardist = "python ./stardist/stardist_test.py"
+test-import = "python -c \"import stardist; import tensorflow; print(f'stardist {stardist.__version__}, tf {tensorflow.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# Trackastra — deep learning cell tracking
+# GitHub: https://github.com/weigertlab/trackastra
+# -----------------------------------------------------------------------------
+[feature.trackastra.dependencies]
+python = "==3.11"
+pytorch = ">=2.7.1,<3"
+jupyter = ">=1.1.1,<2"
+
+[feature.trackastra.system-requirements]
+cuda = "12.8"
+
+[feature.trackastra.pypi-dependencies]
+trackastra = ">=0.4, <0.5"
+
+[feature.trackastra.tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import trackastra; import torch; print(f'trackastra {trackastra.__version__}, torch {torch.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# Spotiflow — spot detection in microscopy
+# -----------------------------------------------------------------------------
+[feature.spotiflow.dependencies]
+python = "3.12.*"
+pytorch = ">=2.7.1,<3"
+jupyter = ">=1.1.1,<2"
+
+[feature.spotiflow.system-requirements]
+cuda = "12.8"
+
+[feature.spotiflow.pypi-dependencies]
+spotiflow = ">=0.6.2, <0.7"
+
+[feature.spotiflow.tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import spotiflow; import torch; print(f'spotiflow {spotiflow.__version__}, torch {torch.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# OMERO — image data management (no GPU)
+# -----------------------------------------------------------------------------
+[feature.omero.dependencies]
+python = "3.10.*"
+zeroc-ice = ">=3.6.5,<3.7"
+
+[feature.omero.pypi-dependencies]
+napari = { version = ">=0.6.5, <0.7", extras = ["all"] }
+omero-py = "==5.21.1"
+napari-omero = { version = ">=0.5.1, <0.6", extras = ["all"] }
+
+[feature.omero.tasks]
+test-import = "python -c \"import omero; import napari; print(f'omero-py OK, napari {napari.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# Micro-SAM — Segment Anything for microscopy
+# Docs: https://computational-cell-analytics.github.io/micro-sam/micro_sam.html
+# -----------------------------------------------------------------------------
+[feature.micro_sam.dependencies]
+python = "3.11.*"
+micro_sam = ">=1.6.1,<2"
+pytorch = ">=2.7.1,<3"
+numpy = "<2"
+zeroc-ice = "<3.7"
+jupyter = ">=1.1.1,<2"
+
+[feature.micro_sam.system-requirements]
+cuda = "12.8"
+
+[feature.micro_sam.pypi-dependencies]
+trackastra = ">=0.3.2, <0.4"
+omero-py = "==5.21.1"
+napari-omero = { version = ">=0.5.1, <0.6", extras = ["all"] }
+
+[feature.micro_sam.tasks]
+test-cuda = "python -c \"import torch; print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda}'); print(f'Device count: {torch.cuda.device_count()}'); print(f'Current device: {torch.cuda.current_device() if torch.cuda.is_available() else None}'); print(f'Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else None}')\""
+test-import = "python -c \"import micro_sam; import torch; print(f'micro_sam {micro_sam.__version__}, torch {torch.__version__}')\""
+
+# -----------------------------------------------------------------------------
+# CAREamics — image restoration and denoising
+# Docs: https://careamics.github.io/
+# NOTE: Uses PyPI PyTorch with custom index (cu118) due to compatibility needs
+# -----------------------------------------------------------------------------
+[feature.careamics.dependencies]
+python = "==3.11"
+jupyter = ">=1.1.1,<2"
+pyyaml = "<=6.0.2"
+
+[feature.careamics.system-requirements]
+cuda = "12.8"
+
+[feature.careamics.pypi-dependencies]
+pillow = "<11.3"
+careamics = { version = "==0.0.16", extras = ["examples"] }
+torch = "*"
+torchvision = "*"
+napari = ">=0.6.5, <0.7"
+careamics-napari = ">=0.0.13, <0.0.14"
+
+[feature.careamics.pypi-options]
+extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
+index-strategy = "unsafe-best-match"
+
+[feature.careamics.tasks]
+test-import = "python -c \"import careamics; import torch; print(f'careamics {careamics.__version__}, torch {torch.__version__}')\""
+
+# CAREamics optional: BioIO support
+[feature.careamics-bioio.pypi-dependencies]
+bioio-bioformats = ">=1.3.0, <2"
+bioio = ">=3.0.0, <4"
+bioio-tifffile = ">=1.3.0, <2"
+
+# CAREamics optional: ImageJ support
+[feature.careamics-imagej.pypi-dependencies]
+pyimagej = ">=1.7.0, <2"
+
+# =============================================================================
+# ENVIRONMENTS — install only what you need
+# =============================================================================
+# Usage:
+#   pixi install -e <environment>
+#   pixi shell -e <environment>
+#   pixi run -e <environment> <task>
+# =============================================================================
+
+[environments]
+biapy = { features = ["biapy"], no-default-feature = true }
+cellpose = { features = ["cellpose"], no-default-feature = true }
+stardist = { features = ["stardist"], no-default-feature = true }
+trackastra = { features = ["trackastra"], no-default-feature = true }
+spotiflow = { features = ["spotiflow"], no-default-feature = true }
+omero = { features = ["omero"], no-default-feature = true }
+micro_sam = { features = ["micro_sam"], no-default-feature = true }
+careamics = { features = ["careamics", "careamics-bioio"], no-default-feature = true }
+careamics-all = { features = ["careamics", "careamics-bioio", "careamics-imagej"], no-default-feature = true }
