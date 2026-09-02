@@ -13,9 +13,11 @@ cmd = "python -c \"import napari, npe2; pm = npe2.PluginManager.instance(); pm.d
 env = { QT_QPA_PLATFORM = "offscreen" }
 
 [dependencies]
-python = "==3.11"
+python = "3.12.*"
 jupyter = ">=1.1.1,<2"
+ipykernel = "<7"  # napari-console requires <7
 pyyaml = "<=6.0.2"
+zeroc-ice = ">=3.6.5,<3.7"  # omero-py requires <3.7
 #jupyter = ">=1.1.1,<2"
 #matplotlib = ">=3.10.6,<4"
 
@@ -35,6 +37,12 @@ torchvision = "*"
 napari = ">=0.8.0, <0.9"
 careamics-napari = "==0.3.0"
 npe2 = ">=0.8.2"
+
+# ---- remote data access: OMERO + OME-Zarr ----
+omero-py = "*"
+napari-omero = { version = "*", extras = ["all"] }
+ome-zarr = "*"
+napari-ome-zarr = "*"
 
 [pypi-options]
 extra-index-urls = ["https://download.pytorch.org/whl/cu118"]

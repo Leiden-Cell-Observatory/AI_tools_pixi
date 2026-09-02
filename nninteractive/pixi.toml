@@ -21,6 +21,7 @@ env = { QT_QPA_PLATFORM = "offscreen" }
 python = "3.12.*"
 pytorch = ">=2.7.1,<2.9"
 numpy = "<2.3"
+zeroc-ice = ">=3.6.5,<3.7"
 
 [pypi-dependencies]
 #torch = "*"
@@ -29,6 +30,12 @@ nninteractive = ">=2.5.1, <3"
 napari = { version = ">=0.8.0, <0.9", extras = ["all"] }
 napari-nninteractive = ">=2.5.3, <3"
 npe2 = ">=0.8.2"
+
+# ---- remote data access: OMERO + OME-Zarr ----
+omero-py = "*"
+napari-omero = { version = "*", extras = ["all"] }
+ome-zarr = "*"
+napari-ome-zarr = "*"
 
 [pypi-options]
 extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
