@@ -1,0 +1,37 @@
+# JupyterLab server environment.
+#
+# Not a tool: this environment holds the Lab *server* the desktop flavour of an
+# SRC workspace starts through `ai-tools-lab`, and nothing else. The tool
+# environments only need ipykernel — the kernels are registered system-wide in
+# /usr/local/share/jupyter/kernels by the pixi_ai_tools Ansible role, and any
+# Lab on the machine picks them up from there.
+#
+# Keeping Lab here rather than in every tool means Lab extensions are installed
+# once, in a known place. jupyterlab-git is the reason this exists: SRC's own
+# JupyterHub flavour ships it, the desktop flavour had no Lab at all, and adding
+# the extension to whichever tool environment happened to be launched was both
+# invisible (which tool wins depends on glob order) and dirtied the shared
+# checkout in /opt.
+#
+# linux-64 only: SRC workspaces are Linux, and this environment never runs on a
+# laptop the way the tool manifests do.
+[workspace]
+authors = ["Maarten Paul <maarten.paul@gmail.com>"]
+channels = ["conda-forge"]
+name = "jupyterlab"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+python = "3.12.*"
+jupyterlab = ">=4.6,<5"
+# The git panel and its diff/merge viewers. nbdime is what renders notebook
+# diffs; jupyterlab-git pulls it in, but pin it here so it is visible.
+jupyterlab-git = ">=0.54,<0.55"
+nbdime = ">=4,<5"
+# The widget manager belongs to the server environment; ipywidgets itself lives
+# in each tool environment, next to the kernel that draws the widgets.
+jupyterlab_widgets = ">=3,<4"
+
+[tasks]
+lab = "jupyter lab"
