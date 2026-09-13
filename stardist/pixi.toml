@@ -7,6 +7,15 @@ platforms = ["win-64", "linux-64"]
 
 [tasks]
 test-stardist = "python ./stardist_test.py"
+test-cuda = "python -c \"import tensorflow as tf; gpus = tf.config.list_physical_devices('GPU'); print(f'TensorFlow {tf.__version__}, built with CUDA: {tf.test.is_built_with_cuda()}'); print(f'GPUs: {gpus}')\""
+
+# TensorFlow from PyPI loads the CUDA 11 libraries (libcudart.so.11.0, cuDNN)
+# by name. On Windows, activation puts the environment's DLLs on PATH; on Linux
+# nothing puts its lib directory on the loader path, so TensorFlow silently fell
+# back to the CPU. The host's own CUDA cannot stand in: it is a different major
+# version.
+[target.linux-64.activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
 
 [dependencies]
 python = "3.10.*"
