@@ -15,12 +15,12 @@ python = "3.12.*"
 pandas = ">=2.3.3,<3"
 scikit-learn = ">=1.7.2,<2"
 jupyter = ">=1.1.1,<2"
-pytorch = "<2.6"
-torchvision = ">=0.20.1,<0.21"
+pytorch = ">=2.9,<2.10"
+torchvision = ">=0.24,<0.25"
 
 [pypi-dependencies]
 mlflow = ">=3.4.0, <4"
-biapy = ">=3.6.8, <4"
+biapy = ">=3.7.1, <4"
 gdown = ">=6.1.0, <7"
 
 [tasks]
