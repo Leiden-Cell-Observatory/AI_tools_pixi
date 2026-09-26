@@ -1,0 +1,12 @@
+# Launchers installed by desktop/install-launchers.sh (Linux desktops).
+# Whitespace-separated; everything after the menu name is the command.
+# Menu name "-" means command line only; use _ for spaces in menu names.
+#   name            tool dir       menu name                 command
+ai-cellpose         cellpose       Cellpose                  cellpose
+ai-microsam         micro_sam      micro-sam_(napari)        napari
+ai-careamics        CAREamics      CAREamics_(napari)        napari
+ai-nninteractive    nninteractive  nnInteractive_(napari)    napari
+ai-omero-napari     omero          napari_+_OMERO            napari
+ai-trackastra       trackastra     -                         trackastra
+ai-spotiflow        spotiflow      -                         spotiflow-predict
+ai-biapy            biapy          -                         biapy
