@@ -167,6 +167,17 @@ get an OpenGL context under Wayland.
 These pixi environments can be used as well as replacement for setting up a conda environment for Fiji plugins requiring a conda environment to run Python tools such as Cellpose and Spotiflow.
 For example they work with: https://github.com/BIOP/ijl-utilities-wrappers.
 
+On Linux, `desktop/fiji-conda.sh` does the wiring (`--remove` undoes it):
+
+- links every installed tool environment into your conda installation as
+  `pixi-<tool>` (e.g. `pixi-cellpose`), so plugins that pick an environment
+  from `conda env list` — such as TrackMate's conda-based detectors
+  (Edit > Options > Configure TrackMate Conda path...) — can select it by name;
+- points the BIOP cellpose wrapper (Plugins > BIOP > Cellpose) at the cellpose
+  environment with env type `conda`, unless you already configured it.
+
+Rerun it after installing a new tool environment.
+
 ## 🧪 Testing CUDA Availability
 
 Most environments include a `test-cuda` task to verify GPU setup:
