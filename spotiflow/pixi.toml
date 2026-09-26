@@ -13,6 +13,7 @@ version = "0.1.0"
 [dependencies]
 python = "3.12.*"
 pytorch = ">=2.7.1,<3"
+torchvision = "*"
 jupyter = ">=1.1.1,<2"
 
 [pypi-dependencies]
