@@ -50,6 +50,10 @@ $MARK
 # Qt apps under Wayland: PyOpenGL picks EGL, where vispy (napari) finds no GL
 # context. XWayland + GLX works; a value set by the caller wins.
 export QT_QPA_PLATFORM="\${QT_QPA_PLATFORM:-xcb}" PYOPENGL_PLATFORM="\${PYOPENGL_PLATFORM:-glx}"
+# Qt uses RESOURCE_NAME as the window's WM_CLASS instance; the dock matches it
+# to StartupWMClass in the menu entry, so every tool keeps its own icon even
+# though several of them are napari.
+export RESOURCE_NAME="\${RESOURCE_NAME:-$name}"
 exec "$PIXI" run --frozen --manifest-path "$REPO/$tool/pixi.toml" $cmd "\$@"
 EOF
     chmod +x "$wrapper"
@@ -80,6 +84,7 @@ Comment=$tool (AI_tools_pixi)
 Exec=$wrapper
 Icon=$icon_path
 Terminal=false
+StartupWMClass=$name
 Categories=Science;
 EOF
     echo "installed $desktop"
