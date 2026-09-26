@@ -1,12 +1,14 @@
 # Launchers installed by desktop/install-launchers.sh (Linux desktops).
-# Whitespace-separated; everything after the menu name is the command.
-# Menu name "-" means command line only; use _ for spaces in menu names.
-#   name            tool dir       menu name                 command
-ai-cellpose         cellpose       Cellpose                  cellpose
-ai-microsam         micro_sam      micro-sam_(napari)        napari
-ai-careamics        CAREamics      CAREamics_(napari)        napari
-ai-nninteractive    nninteractive  nnInteractive_(napari)    napari
-ai-omero-napari     omero          napari_+_OMERO            napari
-ai-trackastra       trackastra     -                         trackastra
-ai-spotiflow        spotiflow      -                         spotiflow-predict
-ai-biapy            biapy          -                         biapy
+# Whitespace-separated; everything after the icon is the command.
+#   menu name: "-" = command line only; use _ for spaces
+#   icon: file inside the tool's site-packages, copied when the environment is
+#         installed ("-" or not installed yet: generic icon)
+#   name            tool dir       menu name                 icon                                                 command
+ai-cellpose         cellpose       Cellpose                  cellpose/logo/logo.png                               cellpose
+ai-microsam         micro_sam      micro-sam_(napari)        napari/resources/logos/gradient-plain-light.svg      napari
+ai-careamics        CAREamics      CAREamics_(napari)        careamics_napari/resources/logo_careamics_v2_128.png napari
+ai-nninteractive    nninteractive  nnInteractive_(napari)    napari/resources/logos/gradient-plain-light.svg      napari
+ai-omero-napari     omero          napari_+_OMERO            napari/resources/logos/gradient-plain-light.svg      napari
+ai-trackastra       trackastra     -                         -                                                    trackastra
+ai-spotiflow        spotiflow      -                         -                                                    spotiflow-predict
+ai-biapy            biapy          -                         -                                                    biapy
