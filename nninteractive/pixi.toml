@@ -24,6 +24,7 @@ env = { QT_QPA_PLATFORM = "offscreen" }
 [dependencies]
 python = "3.12.*"
 pytorch = ">=2.7.1,<2.9"
+torchvision = "*"
 numpy = "<2.3"
 
 [pypi-dependencies]

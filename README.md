@@ -36,7 +36,7 @@ For more installation options, visit: https://pixi.sh/dev/installation/
 Each folder contains its own isolated pixi environment with specific AI/ML tools:
 
 ### **CAREamics/** • [Documentation](https://careamics.github.io/)
-Deep learning-based image restoration and denoising toolkit. Uses CUDA 12.8 with PyTorch.
+Deep learning-based image restoration and denoising toolkit. Uses PyTorch with CUDA 12.8, or the CPU build on machines without an NVIDIA GPU.
 - **Purpose**: Image denoising and restoration for microscopy images
 - **Key packages**: careamics, torch, torchvision, bioio
 - **Features**: Multiple environments (default, bioio, imagej)
@@ -45,7 +45,7 @@ Deep learning-based image restoration and denoising toolkit. Uses CUDA 12.8 with
 Generalist algorithm for cell and nucleus segmentation with GPU acceleration.
 - **Purpose**: Cell segmentation using deep learning
 - **Key packages**: cellpose 4 with GUI, PyTorch
-- **CUDA**: 12.8
+- **CUDA**: 12.8 (CPU build on machines without an NVIDIA GPU)
 
 ### **micro_sam/** • [Documentation](https://computational-cell-analytics.github.io/micro-sam/micro_sam.html)
 Segment Anything Model (SAM) adapted for microscopy images.
@@ -143,9 +143,40 @@ pixi shell
 python your_script.py
 ```
 
+## 🖥️ Desktop launchers (Linux)
+
+`desktop/install-launchers.sh` puts a command for each tool in `~/.local/bin`
+(`ai-cellpose`, `ai-microsam`, `ai-careamics`, …) and adds the GUI tools to the
+application menu. The list lives in `desktop/launchers.tsv`.
+
+```bash
+desktop/install-launchers.sh           # install or update
+desktop/install-launchers.sh --remove  # undo
+ai-cellpose                            # start from anywhere; arguments are passed on
+```
+
+Each launcher runs `pixi run --frozen` against the tool's folder in this
+checkout, so it always uses exactly what `pixi.lock` pins. pixi picks the CUDA
+build on a machine with an NVIDIA GPU and the CPU build otherwise. The first
+start installs the environment, which from the app menu happens without any
+visible progress; run `pixi install` in the tool's folder first to avoid that. The launchers also force XWayland + GLX
+(`QT_QPA_PLATFORM=xcb`, `PYOPENGL_PLATFORM=glx`), without which napari cannot
+get an OpenGL context under Wayland.
+
 ## Using with Fiji plugins
 These pixi environments can be used as well as replacement for setting up a conda environment for Fiji plugins requiring a conda environment to run Python tools such as Cellpose and Spotiflow.
 For example they work with: https://github.com/BIOP/ijl-utilities-wrappers.
+
+On Linux, `desktop/fiji-conda.sh` does the wiring (`--remove` undoes it):
+
+- links every installed tool environment into your conda installation as
+  `pixi-<tool>` (e.g. `pixi-cellpose`), so plugins that pick an environment
+  from `conda env list` — such as TrackMate's conda-based detectors
+  (Edit > Options > Configure TrackMate Conda path...) — can select it by name;
+- points the BIOP cellpose wrapper (Plugins > BIOP > Cellpose) at the cellpose
+  environment with env type `conda`, unless you already configured it.
+
+Rerun it after installing a new tool environment.
 
 ## 🧪 Testing CUDA Availability
 

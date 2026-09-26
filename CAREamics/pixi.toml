@@ -2,7 +2,12 @@
 authors = ["Maarten Paul <maarten.paul@gmail.com>"]
 channels = ["conda-forge"]
 name = "CAREamics"
-platforms = [{ platform = "win-64", cuda = "12.8" }, { platform = "linux-64", cuda = "12.8" }]
+platforms = [
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.8" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.8" },
+  { name = "win-64-cpu", platform = "win-64" },
+]
 version = "0.1.0"
 
 [tasks]
@@ -18,6 +23,9 @@ env = { QT_QPA_PLATFORM = "offscreen" }
 
 [dependencies]
 python = "3.12.*"
+pytorch = ">=2.6,<2.10"  # careamics 0.3.0: torch<2.10
+torchvision = "<=0.25"  # careamics 0.3.0
+pillow = "<11.3"
 jupyter = ">=1.1.1,<2"
 ipykernel = "<7"  # napari-console requires <7
 pyyaml = "<=6.0.2"
@@ -33,10 +41,7 @@ bioio-tifffile = ">=1.3.0, <2"
 pyimagej = ">=1.7.0, <2"
 
 [pypi-dependencies]
-pillow = "<11.3"
 careamics = { version = "==0.3.0", extras = ["examples"] }
-torch = "*"
-torchvision = "*"
 napari = ">=0.8.0, <0.9"
 careamics-napari = "==0.3.0"
 npe2 = ">=0.8.2"
@@ -55,10 +60,6 @@ zeroc-ice = ">=3.6.5,<3.7"
 [feature.omero.pypi-dependencies]
 omero-py = "*"
 napari-omero = { version = "*", extras = ["all"] }
-
-[pypi-options]
-extra-index-urls = ["https://download.pytorch.org/whl/cu118"]
-index-strategy = "unsafe-best-match"
 
 [environments]
 all = ["bioio", "imagej", "omero"]
