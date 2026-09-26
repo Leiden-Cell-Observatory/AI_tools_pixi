@@ -157,8 +157,9 @@ ai-cellpose                            # start from anywhere; arguments are pass
 
 Each launcher runs `pixi run --frozen` against the tool's folder in this
 checkout, so it always uses exactly what `pixi.lock` pins. pixi picks the CUDA
-build on a machine with an NVIDIA GPU and the CPU build otherwise; the first
-start installs the environment. The launchers also force XWayland + GLX
+build on a machine with an NVIDIA GPU and the CPU build otherwise. The first
+start installs the environment, which from the app menu happens without any
+visible progress; run `pixi install` in the tool's folder first to avoid that. The launchers also force XWayland + GLX
 (`QT_QPA_PLATFORM=xcb`, `PYOPENGL_PLATFORM=glx`), without which napari cannot
 get an OpenGL context under Wayland.
 
